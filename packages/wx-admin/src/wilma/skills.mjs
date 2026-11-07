@@ -14,17 +14,28 @@ const kind = KINDS.skills;
 const SKILL_JSON = 'skill.json';
 const FILE_PATH = /^[a-zA-Z0-9](?:[a-zA-Z0-9._/-]*[a-zA-Z0-9_])?$/; // the pattern of SkillFile.path
 
-// The place of a skill file in a folder: a relative path that stays inside it.
+// The place of a skill file in a folder: a relative path that stays inside it, with no hidden part (.git, .envrc).
 function inside(dir, p) {
   if (
     !FILE_PATH.test(String(p)) ||
     String(p)
       .split('/')
-      .some((s) => s === '..' || s === '.' || s === '')
+      .some((s) => s === '' || s.startsWith('.'))
   )
     throw new UsageError(`Not a path of a skill file: ${p}`);
   const full = path.resolve(dir, p);
   if (!full.startsWith(dir + path.sep)) throw new UsageError(`Not a path of a skill file: ${p}`);
+  return full;
+}
+
+// A file of a skill folder to upload: no symbolic link on the way, and its real place inside the real folder.
+function localFile(dir, p) {
+  const full = inside(dir, p);
+  for (let at = full; at.startsWith(dir + path.sep); at = path.dirname(at))
+    if (fs.existsSync(at) && fs.lstatSync(at).isSymbolicLink())
+      throw new UsageError(`${p} is a symbolic link: a skill folder holds its files, never links`);
+  if (fs.existsSync(full) && !fs.realpathSync(full).startsWith(fs.realpathSync(dir) + path.sep))
+    throw new UsageError(`Not a path of a skill file: ${p}`);
   return full;
 }
 
@@ -34,7 +45,9 @@ export function checkSkillFrom(data, from) {
     throw new UsageError(`${from} lists files without an id: give the folder of the export (--from DIR)`);
 }
 
-const fileEntry = (f) => pickFields(f, ['path', 'name', 'size', 'executable']);
+// A file of skill.json: its id lets `skill update --from skill.json` keep it; `create --from DIR` uploads it again.
+const fileEntry = (f) => pickFields(f, ['id', 'path', 'name', 'size', 'executable']);
+const uploadEntry = (f) => pickFields(f, ['path', 'name', 'size', 'executable']);
 
 export const skillExport = {
   summary: 'write a skill to a new folder: skill.json and its files (masked unless --show-secrets)',
@@ -69,7 +82,7 @@ export const skillExport = {
     const data = masked(ctx, {
       ...pickFields(def, kind.createFields),
       files: files.map(fileEntry),
-      ...(version === undefined ? {revision: obj.revision} : {}),
+      ...(version === undefined ? {id: obj.id, revision: obj.revision} : {}),
     });
     fs.writeFileSync(path.join(real, SKILL_JSON), `${JSON.stringify(data, null, 2)}\n`, {
       flag: 'wx',
@@ -102,7 +115,7 @@ export const skillCreate = {
     if (!isDir) checkSkillFrom(data, from);
     // Every file is read and checked before anything is uploaded.
     const local = isDir
-      ? (data.files ?? []).map((f) => ({entry: fileEntry(f), bytes: readForUpload(inside(full, f.path), ctx.env)}))
+      ? (data.files ?? []).map((f) => ({entry: uploadEntry(f), bytes: readForUpload(localFile(full, f.path), ctx.env)}))
       : [];
     const client = await wilmaClient(ctx);
     const files = isDir ? [] : data.files;

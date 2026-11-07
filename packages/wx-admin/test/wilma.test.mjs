@@ -161,7 +161,7 @@ test('export writes the create fields and the revision; it never overwrites a fi
   const file = path.join(dir, 'a.json');
   json(await wx(['wilma', 'agent', 'export', 'Reception', '--to', file]));
   const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-  assert.deepEqual(Object.keys(data).sort(), ['channels', 'engine', 'name', 'revision']);
+  assert.deepEqual(Object.keys(data).sort(), ['channels', 'engine', 'id', 'name', 'revision']);
   assert.equal(data.revision, 3);
   const again = await wx(['wilma', 'agent', 'export', 'Reception', '--to', file]);
   assert.equal(again.code, 64);
@@ -289,7 +289,7 @@ test('skill export writes skill.json and its files; create from the folder uploa
   json(await wx(['wilma', 'skill', 'export', 'pricing', '--to', dir]));
   assert.equal(fs.readFileSync(path.join(dir, 'references/a.md'), 'utf8'), 'hello');
   const def = JSON.parse(fs.readFileSync(path.join(dir, 'skill.json'), 'utf8'));
-  assert.deepEqual(def.files, [{path: 'references/a.md', name: 'a.md', size: 5}]);
+  assert.deepEqual(def.files, [{id: 'fl0000000001', path: 'references/a.md', name: 'a.md', size: 5}]);
   const made = json(await wx(['wilma', 'skill', 'create', '--from', dir]));
   assert.equal(made.uploaded, 1);
   assert.equal(state.uploads.length, 1);
@@ -440,4 +440,113 @@ test('usage without rows says so', async () => {
   const {wx} = setup();
   const u = await wx(['wilma', 'usage'], {output: 'text'});
   assert.equal(u.stdout.trim(), 'No usage in this window');
+});
+
+test('review: a string that holds the mask (a URL query) is refused by update and create', async () => {
+  const s = base();
+  s.tools[0].handler = {mcp: {serverUrl: 'https://mcp.example/sse?token=REALTOKEN'}};
+  const {wx, calls} = setup(s);
+  const dir = tmp();
+  json(await wx(['wilma', 'tool', 'export', 'call_webhook', '--to', path.join(dir, 't.json')]));
+  const r = await wx(['wilma', 'tool', 'update', 'call_webhook', '--from', path.join(dir, 't.json')]);
+  assert.equal(r.code, 64);
+  assert.match(r.stderr, /masked values/);
+  assert.doesNotMatch(r.stderr, /remove those fields/);
+  assert.ok(calls().every((c) => c.method === 'GET'));
+});
+
+test('review: a skill exported with files can be updated from its skill.json', async () => {
+  const s = base();
+  s.skills[0].files = [{id: 'fl0000000001', path: 'a.md', name: 'a.md', size: 1}];
+  s.files = {fl0000000001: {url: 'https://download.example/fl0000000001', bytes: 'x'}};
+  const {wx, calls} = setup(s);
+  const dir = path.join(tmp(), 'sk');
+  json(await wx(['wilma', 'skill', 'export', 'pricing', '--to', dir]));
+  json(await wx(['wilma', 'skill', 'update', 'pricing', '--from', path.join(dir, 'skill.json')]));
+  assert.equal(calls().find((c) => c.method === 'PUT').body.files[0].id, 'fl0000000001');
+});
+
+test('review: a skill folder with a symlink or a hidden path is refused; export writes no hidden files', async () => {
+  const {wx, calls} = setup();
+  const dir = tmp();
+  const outside = path.join(tmp(), 'private.txt');
+  fs.writeFileSync(outside, 'PRIVATE');
+  fs.symlinkSync(outside, path.join(dir, 'notes.md'));
+  fs.writeFileSync(
+    path.join(dir, 'skill.json'),
+    JSON.stringify({name: 'x', description: 'd', content: 'c', files: [{path: 'notes.md'}]}),
+  );
+  const r = await wx(['wilma', 'skill', 'create', '--from', dir]);
+  assert.equal(r.code, 64);
+  assert.match(r.stderr, /link/);
+  fs.writeFileSync(
+    path.join(dir, 'skill.json'),
+    JSON.stringify({name: 'x', description: 'd', content: 'c', files: [{path: 'a/.git/hooks/x'}]}),
+  );
+  assert.equal((await wx(['wilma', 'skill', 'create', '--from', dir])).code, 64);
+  assert.ok(calls().every((c) => c.method === 'GET'));
+  const s = base();
+  s.skills[0].files = [{id: 'fl0000000001', path: 'x/.envrc', name: '.envrc', size: 1}];
+  const two = setup(s);
+  const out = path.join(tmp(), 'out');
+  assert.equal((await two.wx(['wilma', 'skill', 'export', 'pricing', '--to', out])).code, 64);
+  assert.equal(fs.existsSync(path.join(out, 'x/.envrc')), false);
+});
+
+test('review: callers and user names of traces only with --full', async () => {
+  const s = base();
+  s.traces = [
+    {
+      traceId: 't1',
+      service: 'voice',
+      status: 'complete',
+      attributes: {
+        'call.caller.number': '+390212345',
+        'call.caller.name': 'Mario',
+        'user.name': 'Anna',
+        channel: 'voice',
+      },
+    },
+  ];
+  const {wx} = setup(s);
+  const plain = json(await wx(['wilma', 'trace', 'list']));
+  assert.deepEqual(plain.traces[0].attributes, {channel: 'voice'});
+  const g = json(await wx(['wilma', 'trace', 'get', 't1']));
+  assert.deepEqual(g.attributes, {channel: 'voice'});
+  const full = json(await wx(['wilma', 'trace', 'list', '--full']));
+  assert.equal(full.traces[0].attributes['call.caller.number'], '+390212345');
+});
+
+test('review: an export of another object is refused by update', async () => {
+  const s = base();
+  s.tools.push({id: 'tl0000000002', name: 'other', category: 'x', handler: {connector: {}}, revision: 5});
+  const {wx, calls} = setup(s);
+  const dir = tmp();
+  json(await wx(['wilma', 'tool', 'export', 'call_webhook', '--to', path.join(dir, 't.json')]));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 't.json'), 'utf8')).id, 'tl0000000001');
+  const r = await wx(['wilma', 'tool', 'update', 'other', '--from', path.join(dir, 't.json')]);
+  assert.equal(r.code, 64);
+  assert.match(r.stderr, /export of call_webhook \(tl0000000001\)/);
+  assert.ok(calls().every((c) => c.method === 'GET'));
+  json(await wx(['wilma', 'tool', 'create', '--from', path.join(dir, 't.json')]));
+  assert.equal(calls().find((c) => c.method === 'POST').body.id, undefined);
+});
+
+test('review: the owner of a user connection does not show through createdBy without --full', async () => {
+  const s = base();
+  s.connections[1].createdBy = {type: 'user', id: 'u1', name: 'Anna Rossi'};
+  s.connections[1].updatedBy = {type: 'user', id: 'u1', name: 'Anna Rossi'};
+  const {wx} = setup(s);
+  const plain = json(await wx(['wilma', 'connection', 'list']));
+  assert.deepEqual(plain.connections[1].createdBy, {type: 'user', id: 'u1'});
+  assert.deepEqual(plain.connections[1].updatedBy, {type: 'user', id: 'u1'});
+});
+
+test('review: a connector a skill uses is not deleted without --force', async () => {
+  const s = base();
+  s.skills[0].tools = [{connector: {id: 'cn0000000001'}}];
+  const {wx} = setup(s);
+  const r = await wx(['wilma', 'connector', 'delete', 'HubSpot', '--yes']);
+  assert.equal(r.code, 64);
+  assert.match(r.stderr, /used by pricing/);
 });

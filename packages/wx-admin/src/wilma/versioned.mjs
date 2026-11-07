@@ -25,11 +25,12 @@ import {
 
 const VERSION = {type: 'string', placeholder: 'N', description: 'a published version (default: the draft)'};
 
-// A value of the file that was masked on export: sending it would write the mask over the secret.
+// A value of the file that was masked on export (a whole value, or a part of one such as a token in a URL): sending
+// it would write the mask over the secret.
 export function refuseMasked(data, from) {
-  if (JSON.stringify(data ?? null).includes(JSON.stringify(MASK)))
+  if (JSON.stringify(data ?? null).includes(MASK))
     throw new UsageError(
-      `${from} holds masked values (${MASK}): export it with --show-secrets, or remove those fields to keep them`,
+      `${from} holds masked values (${MASK}): export it again with --show-secrets (sending it would write the mask over the secrets)`,
     );
 }
 
@@ -150,7 +151,7 @@ export function versionedCommands(kind, spec) {
         const def = version === undefined ? obj : (await getVersion(client, kind, obj.id, version))?.definition;
         const data = masked(ctx, {
           ...pickFields(def, kind.createFields),
-          ...(version === undefined ? {revision: obj.revision} : {}),
+          ...(version === undefined ? {id: obj.id, revision: obj.revision} : {}),
         });
         const secret = ctx.values['show-secrets'];
         const file = writeNewFile(
@@ -202,6 +203,10 @@ export function versionedCommands(kind, spec) {
           spec.checkFrom?.(data, v.from);
         }
         const {client, obj} = await current(ctx, ctx.positionals[0]);
+        if (data?.id !== undefined && data.id !== obj.id)
+          throw new UsageError(
+            `${v.from} is the export of ${data.name ?? 'another object'} (${data.id}), not of ${obj.name} (${obj.id}): nothing was changed`,
+          );
         if (data?.revision !== undefined && data.revision !== obj.revision)
           throw new UsageError(
             `The ${noun} ${obj.name} changed since ${v.from} was exported (revision ${data.revision}, now ${obj.revision}): export it again`,

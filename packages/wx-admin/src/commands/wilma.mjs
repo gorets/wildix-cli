@@ -333,15 +333,16 @@ const authText = (auth, names = new Map()) => {
   return 'no authorization';
 };
 
-// Who uses a connector: the references of the audit, and the agents whose draft lists it as a capability (seen
-// missing from the references).
+// Who uses a connector: the references of the audit, the agents whose draft lists it as a capability and the skills
+// whose tools name it (both seen missing from the references).
 async function agentsUsingConnector(client, c) {
-  const agents = await listOf(client, KINDS.agents);
   const users = await usedBy(client, uriOf(KINDS.connectors, c.id));
-  for (const a of agents)
+  const add = (label, uri) => users.some((u) => u.uri === uri) || users.push({label, uri});
+  for (const a of await listOf(client, KINDS.agents))
     if ((a.engine?.ai?.capabilities ?? []).some((cap) => cap.connector?.id === c.id))
-      if (!users.some((u) => u.uri === `wilma://agents/${a.id}`))
-        users.push({label: a.name, uri: `wilma://agents/${a.id}`});
+      add(a.name, `wilma://agents/${a.id}`);
+  for (const s of await listOf(client, KINDS.skills))
+    if ((s.tools ?? []).some((t) => t.connector?.id === c.id)) add(s.name, `wilma://skills/${s.id}`);
   return users;
 }
 
@@ -571,7 +572,17 @@ const secretCommands = {
 };
 
 // The owner of a user connection is personal data: without --full only its id.
-const privateConn = (ctx, c) => (ctx.values.full || !c.actor ? c : {...c, actor: {id: c.actor.id}});
+// The owner of a user connection (its actor, and who created and changed it: the owner too) is personal data:
+// without --full only ids.
+const who = (a) => (a ? {type: a.type, id: a.id} : a);
+const privateConn = (ctx, c) =>
+  ctx.values.full
+    ? c
+    : {
+        ...c,
+        ...(c.actor ? {actor: {id: c.actor.id}} : {}),
+        ...(c.type === 'user' ? {createdBy: who(c.createdBy), updatedBy: who(c.updatedBy)} : {}),
+      };
 const connLine = (c) =>
   line(
     `${c.name ?? '(per user)'} (${c.id})`,
@@ -761,6 +772,15 @@ const auditCommands = {
   },
 };
 
+// Callers and users of a trace are personal data: their attributes (call.caller.number, call.caller.name, user.name,
+// user.email…) only with --full.
+const PERSONAL = /^(?:call\.(?:caller|callee)\.|user\.(?:name|email|phone))/;
+const TRACE_FULL = {full: {type: 'boolean', description: 'the numbers and names of callers and users too'}};
+const privateTrace = (ctx, t) =>
+  ctx.values.full || !t?.attributes
+    ? t
+    : {...t, attributes: Object.fromEntries(Object.entries(t.attributes).filter(([k]) => !PERSONAL.test(k)))};
+
 const traceWho = (t) => {
   const a = t.attributes ?? {};
   return a['agent.name'] ?? a['profile.name'] ?? a['agent.id'] ?? a['profile.id'] ?? '';
@@ -775,7 +795,7 @@ const traceCommands = {
   list: {
     summary: 'the traces of Wilma sessions (voice, chat, assistant, copilot, tools, workflow), newest first',
     usage:
-      'wx-admin wilma trace list [--service S] [--status S] [--since DATE] [--until DATE] [--search TEXT] [--filter KEY=VALUE]... [--limit N]',
+      'wx-admin wilma trace list [--service S] [--status S] [--since DATE] [--until DATE] [--search TEXT] [--filter KEY=VALUE]... [--limit N] [--full]',
     options: {
       service: {type: 'string', placeholder: 'S', description: 'voice, chat, assistant, copilot, tools, workflow…'},
       status: {type: 'string', placeholder: 'S', description: 'pending, complete, error…'},
@@ -784,6 +804,7 @@ const traceCommands = {
       search: {type: 'string', placeholder: 'TEXT', description: 'in the trace id, session, conversation…'},
       filter: FILTER,
       limit: LIMIT,
+      ...TRACE_FULL,
     },
     args: [0, 0],
     async run(ctx) {
@@ -798,7 +819,13 @@ const traceCommands = {
       };
       const max = wholeNumber(v.limit, 'limit', {max: 1000, fallback: 50});
       const client = await wilmaClient(ctx);
-      return {traces: masked(ctx, await listAll(client, '/v2/traces', 'traces', params, {max}))};
+      const traces = await listAll(client, '/v2/traces', 'traces', params, {max});
+      return {
+        traces: masked(
+          ctx,
+          traces.map((t) => privateTrace(ctx, t)),
+        ),
+      };
     },
     text: (r) =>
       r.traces.length
@@ -809,12 +836,13 @@ const traceCommands = {
   },
   get: {
     summary: 'one trace and its spans as a timeline',
-    usage: 'wx-admin wilma trace get <trace>',
-    options: {...SHOW_SECRETS},
+    usage: 'wx-admin wilma trace get <trace> [--full]',
+    options: {...TRACE_FULL, ...SHOW_SECRETS},
     args: [1, 1],
     async run(ctx) {
       const client = await wilmaClient(ctx);
-      return masked(ctx, (await client.call('GET', apiPath`/v2/traces/items/${ctx.positionals[0]}`))?.trace);
+      const t = (await client.call('GET', apiPath`/v2/traces/items/${ctx.positionals[0]}`))?.trace;
+      return masked(ctx, t && privateTrace(ctx, {...t, spans: t.spans?.map((sp) => privateTrace(ctx, sp))}));
     },
     text: (t) => {
       const start = Date.parse(t.startTime);

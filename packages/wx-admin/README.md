@@ -520,8 +520,8 @@ Wilma, the agent platform of the cloud: agents, skills, tools, connectors, secre
 | `wx-admin wilma audit list [--uri URI \| --prefix URI] [--action A] [--actor ID] [--since DATE] [--until DATE] [--limit N]` | the audit log of Wilma objects, newest first: time, action, object, who |
 | `wx-admin wilma audit get <event>` | one audit event with its changes |
 | `wx-admin wilma audit uses <uri>` | who uses an object (the agents that use a skill or a tool, their drafts too) |
-| `wx-admin wilma trace list [--service S] [--status S] [--since DATE] [--until DATE] [--search TEXT] [--filter KEY=VALUE]... [--limit N]` | the traces of Wilma sessions (voice, chat, assistant, copilot, tools, workflow), newest first |
-| `wx-admin wilma trace get <trace>` | one trace and its spans as a timeline |
+| `wx-admin wilma trace list [--service S] [--status S] [--since DATE] [--until DATE] [--search TEXT] [--filter KEY=VALUE]... [--limit N] [--full]` | the traces of Wilma sessions (voice, chat, assistant, copilot, tools, workflow), newest first |
+| `wx-admin wilma trace get <trace> [--full]` | one trace and its spans as a timeline |
 | `wx-admin wilma trace model-call <trace> <span>` | one model call of a trace: model, settings, tokens, messages |
 | `wx-admin wilma usage [--service S] [--since DATE] [--until DATE] [--interval hour\|day\|week\|month\|total] [--group-by KEY]... [--filter KEY=VALUE]...` | usage of Wilma over a time window: tokens, call seconds, spans, errors… by service, agent or channel |
 

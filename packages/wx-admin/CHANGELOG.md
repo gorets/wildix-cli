@@ -5,17 +5,17 @@
 - Added: `wx-admin wilma`, Wilma (the agent platform of the Wildix cloud) for the company of the PBX, with the PBX's
   cloud token. `agent`, `skill`, `tool`: list, get (the draft or `--version N`), export (a new file; a skill: a new
   folder with `skill.json` and its files), create from an export, update (from an export and/or flags such as
-  `--instructions FILE`; the `revision` read is sent, and an export older than the last change is refused), versions,
+  `--instructions FILE`; the `revision` read is sent; an export older than the last change, or of another object, is refused), versions,
   diff (default: the latest version against the draft), publish, restore (`--yes`), delete (`--yes`, and `--force`
   when agents use the object). Agents also: `deploy <agent> <version>[=PERCENT]... --yes` (or `--reset`), and their
   API keys (`keys`, `key-create`: the secret is printed once, `key-delete`). `connector`: catalog (deprecated
   definitions only with `--all`), definition, list, get, export, create, update, delete. `secret`: list, get, create
   and rotate (the value typed hidden or piped, never an option), update, delete; never a value. `connection`: list,
   get (the owner of a user connection only with `--full`), verify, delete. `audit list|get|uses` (who changed what,
-  who uses an object), `trace list|get|model-call`, `usage` (tokens, call seconds, sessions, errors by service,
+  who uses an object), `trace list|get|model-call` (callers' numbers and names only with `--full`), `usage` (tokens, call seconds, sessions, errors by service,
   agent or channel). Objects by id or exact name; a name several objects share asks for the id. Answers are masked
-  unless `--show-secrets`; a file with masked values is refused by `create` and `update` (it would write the mask
-  over a secret). Not here: deprecated operations, voicebots and WIM tools (the legacy stack), sandbox and the
+  unless `--show-secrets`; a file with masked values, even a masked token inside a URL, is refused by `create` and
+  `update` (it would write the mask over a secret). A skill folder holds its files: no links, no hidden paths. Not here: deprecated operations, voicebots and WIM tools (the legacy stack), sandbox and the
   copilot library (later), running tools, per-user runtime: `wx-admin cloud wilma <operation>`.
 - Checked live on the stage of two test PBXs: every read on a company with Wilma objects (agents, versions,
   deployment, skills, tools, connectors, catalog, secrets, connections, audit, traces, usage); on the other, with
