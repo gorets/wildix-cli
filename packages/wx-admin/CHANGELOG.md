@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Cloud services with the CPA token of the PBX (Cognito PBX Auth: the cloud identity the PBX gives its
+  administrator, on the internal route `GET /api/v1/PBX/integration/x-bees`): `wx-admin kb` for the knowledge base
+  (knowledge bases, search, answers, data sources with configuration, browse and sync, documents with upload and
+  download) and `wx-admin cloud <service> <operation>` for any operation of the knowledge base, voicebots, WIM tools
+  and Wilma that takes the token, checked against their OpenAPI bundled in `specs/` (`tools/fetch-cloud-specs.mjs`).
+  `--env prod|stable|stage` (default: the environment of the PBX). The token stays in memory, goes only to the
+  service called, never into output or errors; answers are masked unless `--show-secrets`.
+- Checked live on the stage of a test PBX: every read of `kb`; on temporary objects that were deleted: a files data
+  source, a knowledge base, a document uploaded, searched, answered from, downloaded (identical) and deleted. Not
+  checked: a Company API Key on the CPA route; Confluence `configure` with a new token; websites.
+- Found: the knowledge base answers the API token of a Confluence data source in clear text (`ListDataSources`,
+  `GetDataSource`); `wx-admin` masks it.
+
 - `wx-admin config export | import | copy`: carry a chosen part of the configuration to another PBX without
   anything bound to the source (LDAP ids, the serial, passwords), unlike a WMS backup restored elsewhere. A list to
   tick (an object brings what it needs), references kept by name and turned into the ids of the target, a plan

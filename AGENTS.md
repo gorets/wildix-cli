@@ -16,7 +16,8 @@ share the login with both and will move to calling `wx` instead of their own scr
 
 ```
 packages/core/src/program.mjs     the name, npm package and version of the running program (setProgram); user agent
-packages/core/src/registry.mjs    what a spec is (groups, commands, globals, help, completers, around); the common options
+packages/core/src/registry.mjs    what a spec is (groups — a group may hold groups —, commands, globals, help, completers,
+                                  around); the common options
 packages/core/src/cli.mjs         createMain(spec): the router, global options anywhere, exit codes, the context
 packages/core/src/completion.mjs  shell completion: candidates from the spec, scripts for bash, zsh, fish
 packages/core/src/commands/       login, logout, status, profile: the same in both command lines
@@ -44,6 +45,8 @@ imports a command line. A message of the core names the program through `program
 export const SPEC = {
   groups, commands,                                  // what `<program> <group> <command>` and `<program> <command>` run
   globals: {pbx: {type: 'string', needs: 'a PBX host', complete: 'pbxs', description: '...'}},  // taken anywhere
+  // a global reaches commands as ctx.<camelCase name>, or ctx.<key> with `key` (needed when the name is a field
+  // of ctx: --env is {key: 'cloudEnv'}); a group's `commands` may hold a group: `wx-admin kb source list`
   help: {options: ['  --pbx PBX  ...'], exitCodes: 'Exit codes: ...'},                        // lines of the main help
   completers: {pbxs: (env) => [[value, description], ...]},                                   // offline, fast
   around: (cmd, ctx, io, run) => run(),               // optional: e.g. --all-pbx runs the command once per PBX

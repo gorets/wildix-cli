@@ -107,6 +107,33 @@ wx-admin config copy --from old --to new               # the same without the fo
   ones first, and a log file `wx-admin-import-<host>-<time>.log` (here, or `--log DIR`), written every time, also
   with `--dry-run`. Without a terminal: `--all` or `--only`, and `--yes` to write.
 
+## Cloud services
+
+An administrator of a PBX also manages the cloud services of the PBX's company: the knowledge base (WIM),
+voicebots, WIM tools and Wilma. The PBX gives its administrator its own cloud token, the CPA token (Cognito PBX
+Auth: the PBX itself as a user of its company, valid 12 hours), and those services accept it. `wx-admin` takes it from
+the PBX chosen as for every command (`--pbx`, the default PBX, the PBX of the x-bees login), keeps it in memory only
+and sends it only to the service called. A PBX user without the Admin role is refused; whether a Company API Key may
+take it is not checked yet.
+
+The environment is the one of the PBX (its WIM console: production, stable or stage), or `--env prod|stable|stage`.
+The knowledge base has no stable environment.
+
+```sh
+wx-admin kb list                                     # knowledge bases and their data sources
+wx-admin kb ask "How do I upgrade a phone?" --kb Support
+wx-admin kb source sync "Public Confluence" --full
+wx-admin kb doc upload Manuals ./guide.pdf
+wx-admin cloud wilma                                 # every operation of Wilma that takes the token
+wx-admin cloud voicebots ListBots                    # any operation, checked against the bundled OpenAPI
+```
+
+`wx-admin kb` covers knowledge bases, search and answers, data sources (Confluence, websites, files; Google Drive
+is connected in the WIM console with OAuth) and documents. Everything else goes through `wx-admin cloud <service>
+<operation>` with `--param NAME=VALUE` and `--data`; a method other than GET needs `--yes`. Answers of the cloud can
+hold secrets (e.g. the API token of a Confluence data source): they are masked unless `--show-secrets`, and the
+Confluence token is typed hidden, never given as an option.
+
 ## Commands
 
 Every command has `-h`, takes `--pbx HOST` and `--profile EMAIL`, and prints text or, with `--output json`, JSON.

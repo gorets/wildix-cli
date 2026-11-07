@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A group may hold a group: three words name a command (`wx-admin kb source list`), in the router, the help, the
+  completion and `commandsOf()` for the README generators.
+- A global option may name its key in the context (`key`); one that would take the name of a field of the context
+  (`env`, `values`, `token`…) is refused when the program is made.
 - `wldx-core/select`: a checkbox tree for the terminal without dependencies (groups, badges, items that bring
   others, items that cannot be chosen with the reason, a filter); the terminal is always given back.
 - `wldx-core/secret`: hidden input of a secret (moved from `wx-admin`).
