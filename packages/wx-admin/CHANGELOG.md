@@ -12,6 +12,9 @@
 - Checked live on the stage of a test PBX: every read of `kb`; on temporary objects that were deleted: a files data
   source, a knowledge base, a document uploaded, searched, answered from, downloaded (identical) and deleted. Not
   checked: a Company API Key on the CPA route; Confluence `configure` with a new token; websites.
+- Answers of the cloud are masked with `maskCloud` (`src/cloud/mask.mjs`): besides keys, tokens and passwords, whole
+  credentials (a Dialogflow service account), secret headers in `[{name, value}]`, every custom header, every sandbox
+  `env` value, a key or token in the query of a URI; the cursors and page tokens of paged lists are kept.
 - Found: the knowledge base answers the API token of a Confluence data source in clear text (`ListDataSources`,
   `GetDataSource`); `wx-admin` masks it.
 

@@ -36,3 +36,10 @@ test('every command has a summary, a usage that starts with its name, and option
     }
   }
 });
+
+test('every `wx-admin cloud <service> <operation>` example of the README names an operation that exists', async () => {
+  const {operationsOf} = await import('../src/cloud/specs.mjs');
+  const examples = [...readme.matchAll(/wx-admin cloud (kb|voicebots|tools|wilma) ([A-Za-z.]+)/g)];
+  assert.ok(examples.length > 0);
+  for (const [, service, op] of examples) assert.ok(operationsOf(service).has(op), `${service} ${op}`);
+});

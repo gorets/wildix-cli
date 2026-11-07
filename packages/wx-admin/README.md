@@ -125,7 +125,7 @@ wx-admin kb ask "How do I upgrade a phone?" --kb Support
 wx-admin kb source sync "Public Confluence" --full
 wx-admin kb doc upload Manuals ./guide.pdf
 wx-admin cloud wilma                                 # every operation of Wilma that takes the token
-wx-admin cloud voicebots ListBots                    # any operation, checked against the bundled OpenAPI
+wx-admin cloud voicebots ListVoiceBots               # any operation, checked against the bundled OpenAPI
 ```
 
 `wx-admin kb` covers knowledge bases, search and answers, data sources (Confluence, websites, files; Google Drive

@@ -7,7 +7,7 @@ import {apiPath} from 'wldx-core/http';
 import {cloudClient} from '../cloud/client.mjs';
 import {SERVICES} from '../cloud/env.mjs';
 import {operationsOf} from '../cloud/specs.mjs';
-import {maskSecrets} from './trunk.mjs';
+import {maskCloud} from '../cloud/mask.mjs';
 
 const segment = (value) => apiPath(['', ''], value);
 
@@ -105,7 +105,7 @@ export const commands = {
       const {op, path, query, json} = await requestOf(ctx, service, operationId);
       const client = await cloudClient(ctx, service);
       const answer = await client.call(op.method, path, {query, json});
-      return ctx.values['show-secrets'] ? answer : maskSecrets(answer);
+      return ctx.values['show-secrets'] ? answer : maskCloud(answer);
     },
     text(r) {
       if (r?.services)

@@ -156,7 +156,7 @@ test('status --watch stops when idle', async () => {
     {status: 'idle', documentsStats: {completed: 3}},
   ];
   const {wx, f} = setup(s);
-  const r = await wx(['kb', 'source', 'status', 'Confluence', '--watch', '--every', '0'], {output: 'text'});
+  const r = await wx(['kb', 'source', 'status', 'Confluence', '--watch', '--every', '1'], {output: 'text'});
   assert.equal(r.code, 0, r.stderr);
   assert.equal(f.cloudCalls().filter((c) => c.path.endsWith('/sync-status')).length, 3);
   assert.match(r.stdout, /idle/);
@@ -178,4 +178,66 @@ test('logs passes level, search and limit; stats and clone', async () => {
     JSON.parse((await wx(['kb', 'source', 'clone', 'Confluence'])).stdout).dataSourceId.startsWith('ds-'),
     true,
   );
+});
+
+test('a token that expires during --watch is taken again from the PBX, and the watch goes on', async () => {
+  const {fakeJwt} = await import('./helpers.mjs');
+  const T0 = Date.UTC(2026, 10, 7, 12);
+  const first = fakeJwt({'custom:company_id': 'it_x', exp: T0 / 1000 + 120});
+  const second = fakeJwt({'custom:company_id': 'it_x', exp: T0 / 1000 + 43200});
+  const s = state();
+  let polls = 0;
+  const kb = fakeKb(s);
+  const f = fakeCloud(
+    (method, u, req) => {
+      if (u.pathname.endsWith('/sync-status')) {
+        polls += 1;
+        if (req.headers.authorization === `Bearer ${first}` && polls > 1)
+          return {status: 401, body: {message: 'The incoming token has expired'}};
+        return {body: {status: polls < 3 ? 'running' : 'idle', documentsStats: {}}};
+      }
+      return kb(method, u, req);
+    },
+    {tokens: [first, second]},
+  );
+  let t = T0;
+  const r = await run(['kb', 'source', 'status', 'Confluence', '--watch', '--every', '1'], {
+    env: envOfTest(),
+    fetch: f.fetch,
+    now: () => (t += 40_000),
+    output: 'text',
+  });
+  assert.equal(r.code, 0, r.stderr);
+  assert.match(r.stdout, /idle/);
+  assert.equal(f.calls.filter((c) => c.host === 'demo.wildixin.com').length, 2);
+});
+
+test('--every below 1 second is refused', async () => {
+  const {wx, f} = setup();
+  const r = await wx(['kb', 'source', 'status', 'Confluence', '--watch', '--every', '0']);
+  assert.equal(r.code, 64);
+  assert.match(r.stderr, /--every is at least 1/);
+  assert.equal(f.cloudCalls().length, 0);
+});
+
+test('Ctrl-C while --watch waits ends the watch with the last status, not an error', async () => {
+  const s = state();
+  const stop = new AbortController();
+  const kb = fakeKb(s);
+  const f = fakeCloud((method, u, req) => {
+    if (u.pathname.endsWith('/sync-status')) {
+      setTimeout(() => stop.abort(), 50); // Ctrl-C during the wait that follows
+      return {body: {status: 'running', documentsStats: {completed: 1}}};
+    }
+    return kb(method, u, req);
+  });
+  const r = await run(['kb', 'source', 'status', 'Confluence', '--watch', '--every', '5'], {
+    env: envOfTest(),
+    fetch: f.fetch,
+    signal: stop.signal,
+    output: 'text',
+  });
+  assert.equal(r.code, 0, r.stderr);
+  assert.match(r.stdout, /running/);
+  assert.doesNotMatch(r.stderr, /not reachable/);
 });

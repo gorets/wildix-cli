@@ -36,7 +36,9 @@ test/*.test.mjs          node:test against a fake PBX (fetch is injected); test/
   unless `--show-secrets`), never in an error message. Requests refuse redirects. A PBX command names the API-key
   scope of its routes (`{scope}`) so a 403 can say which scope is missing.
 - **Cloud:** the CPA token is a secret: memory only, sent only to the base URL of the service called
-  (`cloudClient`), cut out of errors, never printed or logged; presigned links (uploads, downloads) get no token.
+  (`cloudClient`, one token per request, taken again near its end), cut out of errors, never printed or logged;
+  presigned links (uploads, downloads) get no token. Answers go through `maskCloud` (`src/cloud/mask.mjs`): a new
+  secret shape of a service is one rule there, with its test.
   `specs/*.openapi.json` are made by `tools/fetch-cloud-specs.mjs` (run by hand, reviewed). A command of the
   knowledge base names the operations it uses in the comment of `src/commands/kb.mjs`.
 - **Config transfer:** a reference between objects is a marker (`$ref`, `$self`, `$secret`, `$external`), never

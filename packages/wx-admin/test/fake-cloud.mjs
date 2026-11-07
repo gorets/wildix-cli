@@ -7,10 +7,12 @@ export const KEY = `wsk-v1-${'a'.repeat(93)}`;
 export const EXP = Date.UTC(2026, 10, 7, 20) / 1000;
 export const CPA = fakeJwt({'custom:company_id': 'it_x', 'custom:company_name': 'X Inc', exp: EXP});
 
-export function fakeCloud(cloud, {portal = 'https://wim-console-stage.wildix.com'} = {}) {
+export function fakeCloud(cloud, {portal = 'https://wim-console-stage.wildix.com', tokens = [CPA]} = {}) {
   clearCloudTokens();
   const calls = [];
+  let handed = 0; // the PBX hands the tokens in order, the last one again and again
   const fetch = async (url, init = {}) => {
+    if (init.signal?.aborted) throw new DOMException('This operation was aborted', 'AbortError'); // as fetch does
     const u = new URL(String(url));
     const headers = Object.fromEntries(Object.entries(init.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
     let body = init.body;
@@ -25,7 +27,10 @@ export function fakeCloud(cloud, {portal = 'https://wim-console-stage.wildix.com
       body,
     });
     if (u.host === 'demo.wildixin.com')
-      return new Response(JSON.stringify({type: 'result', result: {token: CPA, portal}}), {status: 200});
+      return new Response(
+        JSON.stringify({type: 'result', result: {token: tokens[Math.min(handed++, tokens.length - 1)], portal}}),
+        {status: 200},
+      );
     const a = await cloud(init.method ?? 'GET', u, {headers, body});
     if (a instanceof Response) return a;
     return new Response(a?.body === undefined ? '' : JSON.stringify(a.body), {status: a?.status ?? 200});

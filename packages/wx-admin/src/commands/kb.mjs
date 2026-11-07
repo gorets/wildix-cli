@@ -19,11 +19,11 @@ import {cloudClient} from '../cloud/client.mjs';
 import {operationsOf} from '../cloud/specs.mjs';
 import {pickByName} from '../match.mjs';
 import {checkNewFile, writeNewFile} from './records.mjs';
-import {maskSecrets} from './trunk.mjs';
+import {maskCloud} from '../cloud/mask.mjs';
 
 const V1 = '/api/v1';
 const kbClient = (ctx) => cloudClient(ctx, 'kb');
-const masked = (ctx, data) => (ctx.values['show-secrets'] ? data : maskSecrets(data));
+const masked = (ctx, data) => (ctx.values['show-secrets'] ? data : maskCloud(data));
 const SHOW = {
   'show-secrets': {type: 'boolean', description: 'show keys and tokens of data sources (masked otherwise)'},
 };
@@ -397,7 +397,7 @@ export const sourceCommands = {
         ...(v.schedule ? {syncSchedule: v.schedule} : full.syncSchedule ? {syncSchedule: full.syncSchedule} : {}),
       };
       const r = await client.call('PUT', `${dsPath(d.id)}/configure`, {json: body});
-      return maskSecrets(r?.dataSource ?? {id: d.id, name: d.name, ...body});
+      return maskCloud(r?.dataSource ?? {id: d.id, name: d.name, ...body});
     },
     text: (d) => `Configured the data source ${d.name} (${d.id})`,
   },
@@ -475,10 +475,14 @@ export const sourceCommands = {
     args: [1, 1],
     async run(ctx) {
       const every = whole(ctx.values.every, 'every') ?? 5;
+      if (every < 1) throw new UsageError('--every is at least 1 (second)', ctx.usage());
       const client = await kbClient(ctx);
       const d = await findSource(client, ctx.positionals[0]);
+      let last;
       for (;;) {
+        if (ctx.signal?.aborted && last) return {name: d.name, ...last}; // Ctrl-C while waiting: the last status
         const r = await client.call('GET', `${dsPath(d.id)}/sync-status`);
+        last = r;
         if (!ctx.values.watch || !RUNNING.test(String(r?.status ?? '')) || ctx.signal?.aborted)
           return {name: d.name, ...r};
         ctx.info(`${localTime(new Date(ctx.clock()).toISOString())}  ${statusLine(r)}`);

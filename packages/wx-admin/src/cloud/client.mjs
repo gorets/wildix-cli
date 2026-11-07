@@ -11,15 +11,20 @@ const PATH = /^\/(?!\/)[^\s#\\]*$/;
 
 export async function cloudClient(ctx, service) {
   if (!Object.hasOwn(SERVICES, service)) baseOf(service, 'prod'); // the error of an unknown service
-  const t = await cloudToken(ctx);
-  const env = ctx.cloudEnv ?? envOf(t.portal);
+  if (ctx.cloudEnv) baseOf(service, ctx.cloudEnv); // an environment the service lacks: refused before any request
+  const first = await cloudToken(ctx);
+  const env = ctx.cloudEnv ?? envOf(first.portal);
   const base = baseOf(service, env);
   const fetchImpl = ctx.fetch ?? globalThis.fetch;
-  const scrub = (s) => String(s ?? '').replaceAll(t.token, '<token>');
+  const seen = new Set([first.token]); // every token this client used: none may show in an error
+  const scrub = (s) => [...seen].reduce((out, token) => out.replaceAll(token, '<token>'), String(s ?? ''));
 
   async function call(method, path, {query: params, json} = {}) {
     if (typeof path !== 'string' || !PATH.test(path) || path.split(/[/?]/).includes('..'))
       throw new UsageError(`Not a path of ${service}: ${path}`);
+    // The token of each request: the one in memory, or a new one from the PBX when it is near its end (a long watch).
+    const t = await cloudToken(ctx);
+    seen.add(t.token);
     const url = `${base}${path}${params ? query(params) : ''}`;
     const headers = {'user-agent': userAgent(), accept: 'application/json', authorization: `Bearer ${t.token}`};
     if (json !== undefined) headers['content-type'] = 'application/json';
@@ -66,5 +71,5 @@ export async function cloudClient(ctx, service) {
     return fetchImpl(url, {method, headers, body, redirect: 'error', signal: ctx.signal});
   }
 
-  return {env, base, company: t.company, companyName: t.companyName, pbx: t.pbx, call, raw};
+  return {env, base, company: first.company, companyName: first.companyName, pbx: first.pbx, call, raw};
 }

@@ -82,5 +82,16 @@ test('--env stable with kb is refused', async () => {
   const r = await wx(f, ['--env', 'stable', 'cloud', 'kb', 'ListKnowledgeBases']);
   assert.equal(r.code, 64);
   assert.match(r.stderr, /no stable environment/);
-  assert.equal(f.cloudCalls().length, 0);
+  assert.equal(f.calls.length, 0, 'not even the PBX is asked');
+});
+
+test('cloud answers: page tokens kept, custom headers and inline credentials masked', async () => {
+  const f = fakeCloud(() => ({
+    body: {knowledgeBases: [], nextToken: 'page-2', mcp: {customHeaders: {Authorization: 'Bearer z'}}},
+  }));
+  const r = await wx(f, ['cloud', 'kb', 'ListKnowledgeBases']);
+  assert.equal(r.code, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.nextToken, 'page-2');
+  assert.notEqual(out.mcp.customHeaders.Authorization, 'Bearer z');
 });
