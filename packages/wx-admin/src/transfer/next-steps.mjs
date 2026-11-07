@@ -234,7 +234,7 @@ export function nextSteps({plan, results, host, rerun}) {
       why: 'Their admin rules now point at this PBX.',
       objects: acl.map((k) => objectOf(k)),
       wms: WMS.acl,
-      command: cmd('acl groups'),
+      command: cmd('acl list'),
       blocking: false,
     });
   }

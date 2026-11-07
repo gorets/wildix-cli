@@ -50,7 +50,7 @@ export const COMMANDS = {...api, ...cloud, login, logout, status};
 const READ_ONLY = {
   system: ['info', 'license', 'settings', 'smtp', 'ntp', 'proxy', 'trusted-ip', 'ports', 'upgrade', 'upgrade-settings'],
   user: ['list', 'get', 'presence', 'registrations', 'groups', 'departments'],
-  acl: ['groups', 'group', 'permissions', 'rules'],
+  acl: ['list', 'get', 'permissions', 'rules'],
   queue: ['list', 'get', 'stats'],
   dialplan: ['list', 'get', 'rules', 'apps', 'settings'],
   timetable: ['list', 'get'],

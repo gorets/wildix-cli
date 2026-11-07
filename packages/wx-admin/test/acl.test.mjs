@@ -134,14 +134,14 @@ const text = (pbx, argv, options = {}) => wx(pbx, [...argv, '--no-color'], {outp
 test('groups and group (by id, name in any case, or DN) as text', async () => {
   const pbx = fakePbx();
   assert.equal(
-    (await text(pbx, ['acl', 'groups'])).stdout,
+    (await text(pbx, ['acl', 'list'])).stdout,
     '1  Admin  1 rules  0 admin rules\n2  Sales  1 rules  1 admin rules\n',
   );
-  assert.equal(JSON.parse((await wx(pbx, ['acl', 'groups'])).stdout).records.length, 2);
-  const g = await text(pbx, ['acl', 'group', 'sales']);
+  assert.equal(JSON.parse((await wx(pbx, ['acl', 'list'])).stdout).records.length, 2);
+  const g = await text(pbx, ['acl', 'get', 'sales']);
   assert.equal(g.stdout, 'Sales (id 2)\nrules:\n  CTI_ANALYTICS  use\nadmin rules:\n  noepage  all\n');
-  assert.equal(JSON.parse((await wx(pbx, ['acl', 'group', dn(1)])).stdout).name, 'Admin');
-  assert.equal((await wx(pbx, ['acl', 'group', 'nope'])).code, 64);
+  assert.equal(JSON.parse((await wx(pbx, ['acl', 'get', dn(1)])).stdout).name, 'Admin');
+  assert.equal((await wx(pbx, ['acl', 'get', 'nope'])).code, 64);
 });
 
 test('create: rules with group names turned into DNs, a parent, a name that exists is refused', async () => {
@@ -176,10 +176,10 @@ test('create: rules with group names turned into DNs, a parent, a name that exis
   });
 });
 
-test('create --from the JSON of acl group (rules and parent copied, the rest left out)', async () => {
+test('create --from the JSON of acl get (rules and parent copied, the rest left out)', async () => {
   const pbx = fakePbx();
   const file = path.join(tempConfigDir(), 'sales.json');
-  fs.writeFileSync(file, (await wx(pbx, ['acl', 'group', 'Sales'])).stdout);
+  fs.writeFileSync(file, (await wx(pbx, ['acl', 'get', 'Sales'])).stdout);
   const r = await wx(pbx, ['acl', 'create', 'Sales2', '--from', file, '--rule', 'CALL no all']);
   assert.equal(r.code, 0, r.stderr);
   assert.deepEqual(pbx.writes()[0].body, {
@@ -281,6 +281,6 @@ test('rules and rules --admin', async () => {
 
 test('a 403 names the scope aclgroups', async () => {
   const fetch = async () => new Response(JSON.stringify({type: 'error', reason: 'Forbidden'}), {status: 403});
-  const r = await run(['acl', 'groups', '--pbx', 'demo'], {env: env(), fetch, registry: {groups}});
+  const r = await run(['acl', 'list', '--pbx', 'demo'], {env: env(), fetch, registry: {groups}});
   assert.match(r.stderr, /aclgroups:read/);
 });

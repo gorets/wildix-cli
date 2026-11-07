@@ -112,7 +112,7 @@ test('a failed object and what was skipped with it: the reason and the same impo
 test('what is never transferred is always listed; ACL changes ask who administers the PBX', () => {
   const list = steps([it('acl-groups/Sales', 'new')], [{key: 'acl-groups/Sales', action: 'create', id: '7'}]);
   assert.match(find(list, /never/).what, /devices/);
-  assert.match(find(list, /administer/).command, /acl groups/);
+  assert.match(find(list, /administer/).command, /acl list/);
 });
 
 test('folds repeated objects; blocking steps first', () => {

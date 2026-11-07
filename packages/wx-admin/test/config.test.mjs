@@ -138,3 +138,8 @@ test('differences and compare', () => {
   ]);
   assert.deepEqual(compare({k: {x: {v: 1}}}, {k: {x: {v: 1}}, j: {}}).skipped, ['j']);
 });
+
+test('the summary of the config group names export, import and copy', async () => {
+  const {SPEC} = await import('../src/cli.mjs');
+  assert.match(SPEC.groups.config.summary, /export.*import.*copy/);
+});

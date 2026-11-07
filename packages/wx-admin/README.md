@@ -185,12 +185,12 @@ Users (colleagues): list, show, create, change, delete, copy preferences, presen
 
 ### wx-admin acl
 
-ACL groups: what the users of a group may do; list, show, create, change, delete, permissions.
+ACL groups: what the users of a group may do; list, get, create, update, delete, permissions.
 
 | Command | What it does |
 | --- | --- |
-| `wx-admin acl groups` | the ACL groups of the PBX |
-| `wx-admin acl group <group>` | one ACL group with its rules and admin rules |
+| `wx-admin acl list` | the ACL groups of the PBX |
+| `wx-admin acl get <group>` | one ACL group with its rules and admin rules |
 | `wx-admin acl create <name> [--rule "KEY ABILITY [GROUP]"]... [--inherits GROUP] [--from FILE\|-]` | create an ACL group, empty, with --rule, or from a JSON file ({name?, inherits?, rules?}) |
 | `wx-admin acl update <group> [--name NAME] [--inherits GROUP \| --no-inherits] [--rule "KEY ABILITY [GROUP]"]... [--remove-rule "KEY [GROUP]"]... [--admin-rule "SUBJECT OPERATION"]... [--remove-admin-rule SUBJECT]... [--from FILE\|-] [--yes]` | change an ACL group: name, parent, rules (added, replaced or removed) or admin rules |
 | `wx-admin acl delete <group>... --yes` | delete ACL groups (needs --yes: their users lose the rights of the group) |
@@ -384,7 +384,7 @@ What calls leave behind: the call history, call recordings, voicemails.
 
 ### wx-admin config
 
-The configuration as files: back up a PBX to a folder, compare a folder or another PBX with a PBX.
+The configuration as files: back up and compare; export, import and copy settings to another PBX (users, routing, trunks).
 
 | Command | What it does |
 | --- | --- |

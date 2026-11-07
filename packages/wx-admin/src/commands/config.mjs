@@ -308,7 +308,8 @@ function importText(r, ctx) {
 
 export const groups = {
   config: {
-    summary: 'the configuration as files: back up a PBX to a folder, compare a folder or another PBX with a PBX',
+    summary:
+      'the configuration as files: back up and compare; export, import and copy settings to another PBX (users, routing, trunks)',
     commands: {
       backup: {
         summary: 'write the configuration of the PBX to a new folder, one JSON file per object (passwords masked)',

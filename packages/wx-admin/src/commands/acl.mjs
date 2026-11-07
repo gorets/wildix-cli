@@ -35,7 +35,7 @@ const listGroups = async (client) => (await client.call('GET', '/PBX/AclGroups/'
 function findGroup(list, ref) {
   const r = String(ref);
   const byIdOrDn = list.find((g) => String(g.id) === r || g.dn === r);
-  return byIdOrDn ?? pickByName(list, r, (g) => g.name, 'ACL group', 'wx-admin acl groups');
+  return byIdOrDn ?? pickByName(list, r, (g) => g.name, 'ACL group', 'wx-admin acl list');
 }
 
 const groupPath = (...ids) => {
@@ -144,11 +144,11 @@ const ruleOptions = {
 
 export const groups = {
   acl: {
-    summary: 'ACL groups: what the users of a group may do; list, show, create, change, delete, permissions',
+    summary: 'ACL groups: what the users of a group may do; list, get, create, update, delete, permissions',
     commands: {
-      groups: {
+      list: {
         summary: 'the ACL groups of the PBX',
-        usage: 'wx-admin acl groups',
+        usage: 'wx-admin acl list',
         options: {},
         args: [0, 0],
         async run(ctx) {
@@ -168,9 +168,9 @@ export const groups = {
           );
         },
       },
-      group: {
+      get: {
         summary: 'one ACL group with its rules and admin rules',
-        usage: 'wx-admin acl group <group>',
+        usage: 'wx-admin acl get <group>',
         details: 'A group is its id, its name or its DN.',
         options: {},
         args: [1, 1],
@@ -190,7 +190,7 @@ export const groups = {
           from: {
             type: 'string',
             placeholder: 'FILE',
-            description: 'the group as JSON, as acl group --output json gives it (a file, or - for stdin)',
+            description: 'the group as JSON, as acl get --output json gives it (a file, or - for stdin)',
           },
         },
         args: [1, 1],
