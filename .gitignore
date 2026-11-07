@@ -14,3 +14,6 @@ packages/*/LICENSE
 
 # Plan execution workspaces
 .superpowers/
+
+# Design specs and plans (kept locally, not published)
+docs/

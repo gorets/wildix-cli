@@ -54,7 +54,7 @@ test/*.test.mjs          node:test against a fake PBX (fetch is injected); test/
   knowledge base names the operations it uses in the comment of `src/commands/kb.mjs`.
 - **Config transfer:** a reference between objects is a marker (`$ref`, `$self`, `$secret`, `$external`), never
   an id of the source; a new reference site of a dialplan application is one line of `APP_REFS` (src/transfer/
-  refs.mjs). Spec: docs/specs/2026-11-07-config-transfer-design.md.
+  refs.mjs).
 - **PBX writes** follow the API: a dialplan is written whole; a change that stops calls or cannot be undone needs
   `--yes`. Test against the fake PBX of the tests; live checks only on a test PBX, on objects the test creates and
   deletes.

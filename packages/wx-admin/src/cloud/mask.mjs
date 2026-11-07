@@ -1,7 +1,7 @@
 // Secrets in the answers of the cloud services, masked: fields whose name says secret (keys, tokens, passwords,
 // credentials), the value of a header whose name does (headers as [{name, value}]), every custom header, every
 // sandbox environment value, a key or token in the query of a URI; never the cursors and page tokens of paged lists.
-// The shapes come from the specs of WIM voicebots, WIM tools and Wilma (docs/research of 2026-11-07).
+// The shapes come from the OpenAPI of WIM voicebots, WIM tools and Wilma (specs/).
 export const MASK = '********';
 
 const SECRET = /secret|password|passwd|^register$|^key$|api_?key|token|credentials|private_?key|authorization|cookie/i;
