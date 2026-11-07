@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 — 2026-11-07
+
+- Nothing of its own: released with `wx-admin` 1.2.0 (config export, import and copy) and `wldx-core` 1.2.0 (a
+  checkbox picker, hidden input of secrets), one version for the three.
+
 ## 1.1.0 — 2026-11-07
 
 - The repository is a pnpm workspace: `wx` is `packages/wx`, next to `wx-admin` (`packages/wx-admin`, npm

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 — 2026-11-07
 
 - `wx-admin config export | import | copy`: carry a chosen part of the configuration to another PBX without
   anything bound to the source (LDAP ids, the serial, passwords), unlike a WMS backup restored elsewhere. A list to
@@ -14,6 +14,7 @@
   `wcgrp` is unique per PBX; the PBX answers `0` or `"0"` for the same value; the dialplan database has no list of
   its families. Only with tests: users, trunks, trunk groups and price lists written to a PBX; `copy` between two
   PBX.
+
 ## 1.1.0 — 2026-11-07
 
 - The first published version. It starts at 1.1.0, the version of `wx` and of their shared core: the three are
