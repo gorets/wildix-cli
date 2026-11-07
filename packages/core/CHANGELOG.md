@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.4.1 — 2026-11-08
+
+- Nothing of its own: released with `wx-admin` 1.4.1 (the masking of the cloud answers), one version for the three.
+
 ## 1.4.0 — 2026-11-07
 
 - A command line without the x-bees login: `profiles: false` in the spec drops `--profile`, its help line and

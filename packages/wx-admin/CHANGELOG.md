@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.1 — 2026-11-08
+
+- Fixed: the masking of the cloud answers hid what only names or points to a secret. `wx-admin cloud wilma
+  ListSecrets` showed `"secrets": "********"` in place of the list of secrets (names and metadata: Wilma never
+  returns their values), and a connector showed its definition (`hubspot`) as `********`. Now visible: Wilma secret
+  records and references (`{id}`), connection references, the metadata of an agent API key, the authorization modes
+  and scopes of a connector, a `key` that names a thing (`{key, version}`, `{id, key}`), ids, types and statuses.
+  Still masked: passwords, tokens, API keys, client secrets, the secret of a new agent API key, service account
+  credentials (whole), secret header values, custom headers, sandbox environment values, and any `value` inside a
+  field named as a secret.
+
 ## 1.4.0 — 2026-11-07
 
 - Added: `wx-admin login [<host>]` signs in to the PBX itself, with a menu that puts first a **Company API Key**
