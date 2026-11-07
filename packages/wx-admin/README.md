@@ -76,6 +76,37 @@ ACL groups. Ids and runtime fields are left out and included dialplans are named
 in git; `wx-admin config diff DIR` shows what changed on the PBX since (`+` only on the PBX, `-` only in the folder,
 `~` changed, with the paths), `--with OTHERPBX` compares two PBX, `--all-pbx` compares every PBX with one folder.
 
+## Moving configuration to another PBX
+
+A WMS backup restored on another PBX carries LDAP and values bound to the serial of the first one, and breaks the
+second. `wx-admin` carries a chosen part of the configuration instead, with nothing bound to the source:
+
+```sh
+wx-admin config export --pbx old --to ./move          # tick what to carry (or --all, --only KIND:NAME,…; --users)
+wx-admin config import ./move --pbx new --dry-run      # the plan: new, the same, differs, blocked (and why)
+wx-admin config import ./move --pbx new                # tick, type the trunk passwords, confirm, write
+wx-admin config copy --from old --to new               # the same without the folder
+```
+
+- **What is carried:** dialplans (with included dialplans), general dialplan settings, timetables, IVR menus,
+  switches, paging groups, queues, dialplan database keys (the families the dialplans use; more with
+  `--db-family`), ACL groups, SIP trunks, trunk groups, price lists, and users with `--users` (portable fields
+  only). **Never:** devices, licenses, PSTN and FXO trunks, call history, recordings, voicemails, LDAP ids, jids,
+  passwords, system settings.
+- **References** between objects are kept by name (`{"$ref": "queues/Support", "as": "id"}`) and become the ids,
+  names or LDAP dns of the new PBX on import; ACL admin rules about the old PBX are about the new one. An object
+  where the serial or the host of the old PBX is still found is not carried (listed as bound).
+- **The folder** is one JSON Lines file per kind (`users.jsonl`: one object per line) and `manifest.json`; it holds
+  no password and not the serial.
+- **The import** compares every object with the new PBX by name: new ones are ticked, one that differs is
+  overwritten only when ticked (or `--overwrite`), blocked ones say why (a reference to nothing, no free license,
+  an extension taken). Passwords of the chosen trunks are typed hidden (or `--secrets FILE`). Objects are written in
+  the order they need each other; one that fails does not stop the rest, and running the same import again writes
+  only what is left.
+- **At the end**, a list of what is left to do on the new PBX (where in WMS, which `wx-admin` command), the blocking
+  ones first, and a log file `wx-admin-import-<host>-<time>.log` (here, or `--log DIR`), written every time, also
+  with `--dry-run`. Without a terminal: `--all` or `--only`, and `--yes` to write.
+
 ## Commands
 
 Every command has `-h`, takes `--pbx HOST` and `--profile EMAIL`, and prints text or, with `--output json`, JSON.

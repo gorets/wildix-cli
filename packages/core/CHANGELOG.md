@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `wldx-core/select`: a checkbox tree for the terminal without dependencies (groups, badges, items that bring
+  others, items that cannot be chosen with the reason, a filter); the terminal is always given back.
+- `wldx-core/secret`: hidden input of a secret (moved from `wx-admin`).
 ## 1.1.0 — 2026-11-07
 
 - The first version: the shared core of `wx` (`wldx-cli`) and `wx-admin` (`wldx-admin-cli`), taken out of their

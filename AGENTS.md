@@ -20,6 +20,8 @@ packages/core/src/registry.mjs    what a spec is (groups, commands, globals, hel
 packages/core/src/cli.mjs         createMain(spec): the router, global options anywhere, exit codes, the context
 packages/core/src/completion.mjs  shell completion: candidates from the spec, scripts for bash, zsh, fish
 packages/core/src/commands/       login, logout, status, profile: the same in both command lines
+packages/core/src/select.mjs      a checkbox tree for the terminal (createModel, select)
+packages/core/src/secret.mjs      hidden input of a secret, else the first line of stdin
 packages/core/src/auth.mjs        login (code by e-mail), sessions in ~/.wildix/tokens, renewal; the wildix-auth format
 packages/core/src/files.mjs       what may be read to be sent (no secrets) and where files may be written
 packages/core/src/format.mjs      text output: toText, table, localTime, duration, oneLine, paint, clean

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- `wx-admin config export | import | copy`: carry a chosen part of the configuration to another PBX without
+  anything bound to the source (LDAP ids, the serial, passwords), unlike a WMS backup restored elsewhere. A list to
+  tick (an object brings what it needs), references kept by name and turned into the ids of the target, a plan
+  (new, the same, differs, blocked with the reason), trunk passwords typed on import, writes in dependency order,
+  the next steps (where in WMS, which command) and a dated log. Users optional (`--users`), portable fields only.
+- Checked live on the test PBX (WMS 7.11): export of everything (the serial nowhere in the folder); import of it
+  back as a dry run (28 the same); a real import of four temporary objects (ACL group, queue, switch, dialplan
+  pointing at them and at itself), checked and deleted. Found live: the parameters that point at objects in every
+  dialplan application; a user is created without a password but needs `role` and `dialplan`; an ACL group's
+  `wcgrp` is unique per PBX; the PBX answers `0` or `"0"` for the same value; the dialplan database has no list of
+  its families. Only with tests: users, trunks, trunk groups and price lists written to a PBX; `copy` between two
+  PBX.
 ## 1.1.0 — 2026-11-07
 
 - The first published version. It starts at 1.1.0, the version of `wx` and of their shared core: the three are
