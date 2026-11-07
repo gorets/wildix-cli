@@ -40,7 +40,8 @@
       "suspicious": {
         "noControlCharactersInRegex": "off",
         "noThenProperty": "off",
-        "noAssignInExpressions": "off"
+        "noAssignInExpressions": "off",
+        "noTemplateCurlyInString": "off"
       },
       "correctness": {
         "noUnusedFunctionParameters": "off"
