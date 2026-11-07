@@ -11,10 +11,11 @@ import {refuseUnsafeWrite} from 'wldx-core/files';
 import {oneLine, paint} from 'wldx-core/format';
 import {select} from 'wldx-core/select';
 import {pbxClient, readSerial} from '../pbx.mjs';
-import {writeExport} from '../transfer/folder.mjs';
+import {readExport, writeExport} from '../transfer/folder.mjs';
 import {readKinds, TRANSFER_KINDS} from '../transfer/kinds.mjs';
+import {runImport} from '../transfer/run.mjs';
 import {toPortable} from '../transfer/refs.mjs';
-import {chooseExport, dbFamiliesOf, selectFrom} from '../transfer/selection.mjs';
+import {chooseExport, closure, dbFamiliesOf, selectFrom} from '../transfer/selection.mjs';
 import {maskSecrets} from './trunk.mjs';
 
 const listOf = (r) => (Array.isArray(r) ? r : (r?.records ?? []));
@@ -240,6 +241,69 @@ const CHOICE_OPTIONS = {
   },
 };
 
+const IMPORT_OPTIONS = {
+  all: {type: 'boolean', description: 'every new object (and those that differ, with --overwrite)'},
+  only: CHOICE_OPTIONS.only,
+  overwrite: {type: 'boolean', description: 'without the list: overwrite the objects that differ (else they are left)'},
+  secrets: {
+    type: 'string',
+    placeholder: 'FILE',
+    description: 'without a terminal: the passwords, {"trunks-sip/<name>": {"password": "…"}}',
+  },
+  'dry-run': {type: 'boolean', description: 'the plan and the next steps only; nothing is written (the log is)'},
+  yes: {type: 'boolean', description: 'without a terminal: write without asking'},
+  log: {type: 'string', placeholder: 'DIR', description: 'where the log file goes (default: here)'},
+};
+
+function checkImportValues(ctx) {
+  const v = ctx.values;
+  if (v.all && v.only) throw new UsageError('Give --all or --only, not both', ctx.usage());
+  if (!v.all && !v.only && !interactive(ctx))
+    throw new UsageError(
+      'Without a terminal, choose what to import with --all or --only KIND:NAME,… (and --yes to write)',
+      ctx.usage(),
+    );
+}
+
+// The result printed; exit 1 when an object failed.
+function finish(ctx, r) {
+  if (!r.results.some((x) => x.action === 'failed')) return r;
+  ctx.emit(r);
+  const err = new Error(`${r.results.filter((x) => x.action === 'failed').length} objects failed (log: ${r.log})`);
+  err.exitCode = 1;
+  throw err;
+}
+
+function importText(r, ctx) {
+  const c = paint(ctx);
+  const lines = [];
+  const count = (a) => r.results.filter((x) => x.action === a).length;
+  if (r.dryRun) lines.push(c.bold(`Dry run: nothing was written to ${r.pbx}`));
+  else if (!r.written) lines.push(c.bold(`Nothing was written to ${r.pbx}`));
+  else
+    lines.push(
+      c.bold(
+        `Written to ${r.pbx}: ${count('create')} created, ${count('overwrite')} overwritten, ${count('skip')} skipped, ${count('failed')} failed`,
+      ),
+    );
+  lines.push(
+    `Plan from ${r.from}: ${Object.entries(r.plan.counts)
+      .map(([k, n]) => `${n} ${k}`)
+      .join(', ')}`,
+  );
+  for (const i of r.plan.items.filter((x) => x.state === 'blocked'))
+    lines.push(c.yellow(`  blocked ${i.key}: ${i.reason}`));
+  for (const x of r.results.filter((y) => y.action === 'failed')) lines.push(c.red(`  failed ${x.key}: ${x.error}`));
+  if (r.nextSteps.length) lines.push('', c.bold('Next steps:'));
+  for (const [n, s] of r.nextSteps.entries()) {
+    lines.push(`${n + 1}. ${s.blocking ? c.yellow('[needed] ') : ''}${s.what}`, `   ${c.dim(s.why)}`);
+    if (s.wms) lines.push(`   ${c.dim(`WMS: ${s.wms}`)}`);
+    if (s.command) lines.push(`   ${s.command}`);
+  }
+  lines.push('', `Log: ${r.log}`);
+  return lines;
+}
+
 export const groups = {
   config: {
     summary: 'the configuration as files: back up a PBX to a folder, compare a folder or another PBX with a PBX',
@@ -277,6 +341,77 @@ export const groups = {
           `Backed up ${r.pbx} to ${r.dir}`,
           ...Object.entries(r.kinds).map(([k, n]) => `  ${k.padEnd(18)} ${n}`),
         ],
+      },
+      import: {
+        summary:
+          'write a config export to this PBX: a plan, what to write (chosen), the passwords, a log and what is left to do',
+        usage:
+          'wx-admin config import <dir> [--all | --only KIND:NAME,…] [--overwrite] [--secrets FILE] [--dry-run] [--yes] [--log DIR]',
+        details: [
+          'Every object of the folder is compared with this PBX: new, the same, differs, or blocked (with the reason). In a',
+          'terminal, a list to tick opens (new ones ticked; ticking one that differs overwrites it), then the passwords',
+          'the chosen trunks need, then a confirmation. Objects are written in the order they need each other; one that',
+          'fails does not stop the rest. A log file is written every time (--log DIR, else here), also with --dry-run.',
+          'Without a terminal: --all or --only, and --yes to write.',
+        ].join('\n'),
+        options: IMPORT_OPTIONS,
+        args: [1, 1],
+        async run(ctx) {
+          checkImportValues(ctx);
+          const {manifest, kinds} = await readExport(ctx, ctx.positionals[0]);
+          const portable = {...manifest, kinds};
+          const client = await pbxClient(ctx);
+          const rerun = `wx-admin config import ${ctx.positionals[0]} --pbx ${client.target.host}`;
+          return finish(
+            ctx,
+            await runImport(ctx, {
+              portable,
+              from: `${ctx.positionals[0]} (exported from ${manifest.source?.host ?? 'a PBX'})`,
+              client,
+              values: ctx.values,
+              rerun,
+            }),
+          );
+        },
+        text: importText,
+      },
+      copy: {
+        summary: 'carry the configuration of one PBX to another: export in memory, then import (plan, choice, log)',
+        usage:
+          'wx-admin config copy --from PBX --to PBX [--all | --only KIND:NAME,…] [--users] [--overwrite] [--secrets FILE] [--dry-run] [--yes] [--log DIR]',
+        details: 'As config export then config import, without a folder. --from and --to take what --pbx takes.',
+        options: {
+          from: {type: 'string', placeholder: 'PBX', description: 'the PBX to read', complete: 'pbxs'},
+          to: {type: 'string', placeholder: 'PBX', description: 'the PBX to write', complete: 'pbxs'},
+          users: CHOICE_OPTIONS.users,
+          'db-family': CHOICE_OPTIONS['db-family'],
+          ...IMPORT_OPTIONS,
+        },
+        args: [0, 0],
+        async run(ctx) {
+          const v = ctx.values;
+          if (!v.from || !v.to) throw new UsageError('--from and --to are needed', ctx.usage());
+          if (ctx.pbx) throw new UsageError('copy takes --from and --to, not --pbx', ctx.usage());
+          checkImportValues(ctx);
+          const source = await pbxClient({...ctx, pbx: v.from});
+          const client = await pbxClient({...ctx, pbx: v.to});
+          if (source.target.host === client.target.host)
+            throw new UsageError(`--from and --to are the same PBX: ${client.target.host}`);
+          const [a, b] = [await readSerial(source), await readSerial(client)];
+          if (a && b && a === b) throw new UsageError(`--from and --to are the same PBX (serial ${a})`);
+          const {portable} = await exportOf(ctx, source, {users: v.users, dbFamily: v['db-family']});
+          const bound = new Set(portable.bound.map((x) => `${x.kind}/${x.name}`));
+          const all = Object.entries(portable.kinds).flatMap(([kind, list]) => list.map((o) => `${kind}/${o.name}`));
+          const carried = selectFrom(portable, new Set([...closure(portable, all)].filter((k) => !bound.has(k))));
+          for (const x of portable.bound)
+            ctx.info(`not carried, bound to ${source.target.host}: ${x.kind}/${x.name} (${x.found} in ${x.path})`);
+          const rerun = `wx-admin config copy --from ${v.from} --to ${v.to}`;
+          return finish(
+            ctx,
+            await runImport(ctx, {portable: carried, from: source.target.host, client, values: v, rerun}),
+          );
+        },
+        text: importText,
       },
       export: {
         summary: 'choose what to carry to another PBX and write it to a new folder, without anything bound to this PBX',
