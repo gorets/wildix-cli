@@ -113,8 +113,8 @@ How should wx-admin sign in to mypbx.wildixin.com?
      asks the PBX to send it again (once per empty answer).
   3. The token sign-in says the login or password is wrong (401 with its reason) → that error, nothing saved: a
      wrong password, not a Basic that is off (the 401 of step 1 alone cannot tell the two apart).
-  4. 404 (no token sign-in on this WMS) after a refused Basic → `AuthError`: "This PBX accepts neither Basic
-     (ALLOW_BASIC_AUTH is off) nor the WMS sign-in for tools (it comes with a newer WMS): use a Company API Key
+  4. 404 (no token sign-in on this WMS) after a refused Basic → `AuthError`: "Basic was refused (ALLOW_BASIC_AUTH
+     off, or a wrong password) and <host> has no sign-in for tools: check the password, or use a Company API Key
      (wx-admin login <host> --api-key)". A 403 shows the PBX's reason (too many attempts, a new location to confirm
      in WMS, …).
   The output says which way it took and that the password is saved: `Signed in to mypbx.wildixin.com as admin with
@@ -216,6 +216,13 @@ An access file in another shape (an older `auth: "basic"`) is not read: sign in 
   once (an administrator may have turned it on) → mode `basic`; else the token sign-in with the saved password, as in
   mode `basic`. Basic is tried again only here, at `login` and at `status --check`, never on every command (each
   failed attempt may count towards the lockout).
+- **A refusal is final for the command and remembered**: once the access cannot recover, every later request of the
+  command fails at once without a request (a long command never sends a wrong password again), and commands that go
+  on per object (`config backup`, `export`, `import`, `copy`) stop on it (exit 2). A refused password (or Basic
+  refused on a WMS without the sign-in for tools) is saved in the file as `refused`, the password removed: later
+  commands do not contact the PBX and say `wx-admin login <host>`. A wrong 2FA code is not remembered.
+- **Writes** merge the changed fields onto a fresh read of the file, and are skipped when the file is gone (a logout
+  meanwhile) or holds another sign-in (a new login meanwhile).
 - **Two commands at once**: a renewal re-reads the file first; when its refresh is refused, it re-reads the file once
   more and, if another process has saved a newer refresh token or mode meanwhile, uses that. (Server side, an older
   refresh token stays valid while its session lives, so a race costs nothing; the re-read is a guard.)

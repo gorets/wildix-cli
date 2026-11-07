@@ -62,13 +62,14 @@ export const groups = {
           const client = await pbxClient(ctx);
           const {target} = client;
           await client.call('GET', '/Dictionaries');
-          // Read after the call: a password access may have moved between Basic and the WMS sign-in.
-          const saved = target.fromEnvironment ? undefined : savedAccess(target.host, ctx.env);
-          // A saved access without its serial (added before wx-admin kept it) gets it now: --pbx can then use it.
+          // Read after the calls: a password access may have moved between Basic and the WMS sign-in meanwhile.
+          let saved = target.fromEnvironment ? undefined : savedAccess(target.host, ctx.env);
+          // A saved access without its serial (signed in to before wx-admin kept it) gets it now: --pbx can use it.
           let serial = saved?.serial ?? null;
           if (saved && !saved.serial) {
             serial = await readSerial(client);
-            if (serial) saveAccess({...saved, serial}, ctx.env);
+            saved = savedAccess(target.host, ctx.env);
+            if (serial && saved) saveAccess({...saved, serial}, ctx.env);
           }
           return {
             host: target.host,

@@ -10,7 +10,7 @@ import {UsageError} from 'wldx-core/errors';
 import {refuseUnsafeWrite} from 'wldx-core/files';
 import {oneLine, paint} from 'wldx-core/format';
 import {select} from 'wldx-core/select';
-import {pbxClient, readSerial} from '../pbx.mjs';
+import {accessRefused, pbxClient, readSerial} from '../pbx.mjs';
 import {readExport, writeExport} from '../transfer/folder.mjs';
 import {readKinds, TRANSFER_KINDS} from '../transfer/kinds.mjs';
 import {shellArg} from '../transfer/next-steps.mjs';
@@ -65,6 +65,7 @@ export async function snapshot(client, kinds, info = () => {}) {
     try {
       answer = await client.call('GET', k.path, undefined, {scope: k.scope});
     } catch (e) {
+      if (accessRefused(e)) throw e;
       info(`${kind}: not read (${oneLine(e.message, 140)})`);
       continue;
     }

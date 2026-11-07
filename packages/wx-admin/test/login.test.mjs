@@ -103,7 +103,10 @@ test('Basic off and no WMS sign-in on the PBX (404): the API-key hint', async ()
   const pbx = fakeWms({now, basic: false, auth: false});
   const r = await login(home(), ['mypbx', '--password'], {fetch: pbx.fetch, stdin: 'pw\n'});
   assert.equal(r.code, 2);
-  assert.match(r.stderr, /neither Basic.*nor the WMS sign-in.*wx-admin login mypbx\.wildixin\.com --api-key/s);
+  assert.match(
+    r.stderr,
+    /Basic was refused \(ALLOW_BASIC_AUTH off, or a wrong password\).*no sign-in for tools.*--api-key/s,
+  );
 });
 
 test('a piped password, 2FA asked and no --code: exit 64 naming --code, no wait', async () => {

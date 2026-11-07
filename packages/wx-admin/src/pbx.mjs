@@ -133,6 +133,7 @@ export function savedPbxs(env = process.env) {
         ? {
             mode: a.mode,
             user: a.username,
+            ...(a.refused ? {refused: a.refused} : {}),
             ...(a.mode === 'token' ? {validUntil: a.validUntil ?? null, lastUsed: a.lastUsed ?? null} : {}),
           }
         : {}),
@@ -221,8 +222,8 @@ function targetOf(ctx, a, by, {persist = true} = {}) {
     // A new access being checked before it is saved: its mode was chosen at sign-in, a refusal is final.
     if (!persist && a.mode === 'basic')
       return {...base, mode: 'basic', user: a.username, header: async () => basicHeader(a)};
-    const {header, onUnauthorized} = passwordAccess(ctx, a, {persist});
-    return {...base, mode: a.mode, user: a.username, header, ...(persist ? {onUnauthorized} : {})};
+    const {header, onUnauthorized, preferBasic} = passwordAccess(ctx, a, {persist});
+    return {...base, mode: a.mode, user: a.username, header, ...(persist ? {onUnauthorized, preferBasic} : {})};
   }
   return {...base, header: async () => `Bearer ${a.auth === 'apikey' ? a.key : a.token}`};
 }
@@ -262,11 +263,14 @@ export async function probeBasic({base, username, password, fetch}) {
 const isoOf = (ms) => new Date(ms).toISOString();
 const SKEW_MS = 60_000;
 
-// A `password` access: {header(), onUnauthorized()} over the saved file. Mode basic: Basic on every request; a 401
-// moves it to the token sign-in. Mode token: the saved access token while it has a minute left, else a renewal; a
-// refused renewal tries Basic once (an administrator may have turned it on), else signs in again with the saved
-// password (a 2FA code is asked on a terminal only). Every change re-reads the file first (another wx-admin may have
-// signed in meanwhile) and is saved at once. One sign-in attempt of each kind per command at most.
+// A `password` access: {header(), onUnauthorized(), preferBasic()} over the saved file. Mode basic: Basic on every
+// request; a 401 moves it to the token sign-in. Mode token: the saved access token while it has a minute left, else a
+// renewal; a refused renewal tries Basic once (an administrator may have turned it on), else signs in again with the
+// saved password (a 2FA code is asked on a terminal only). At most one attempt of each kind per command: once the
+// access cannot recover, every later request of the command gets the same error without a request (a long command
+// must not send a wrong password again and again). A refused password is remembered in the file (the password is
+// removed): later commands do not try it at all. Writes merge the changed fields onto a fresh read of the file and
+// are skipped when another wx-admin logged out or signed in differently meanwhile.
 export function passwordAccess(ctx, start, {persist = true} = {}) {
   const env = ctx.env;
   const fetch = ctx.fetch ?? globalThis.fetch;
@@ -275,17 +279,33 @@ export function passwordAccess(ctx, start, {persist = true} = {}) {
   const {host} = start;
   const user = start.username;
   let current = start;
+  let failed = start.refused ? refusedError(start.refused) : null;
   const tried = {basic: false, signIn: false};
+  const NO_TOKENS = {accessToken: undefined, accessTokenExpires: undefined, refresh: undefined, validUntil: undefined};
   const reread = () => (persist ? savedAccess(host, env) : undefined) ?? current;
-  const store = (next) => {
-    current = next;
-    if (persist) saveAccess(next, env);
+  const store = (patch) => {
+    const before = current;
+    current = {...current, ...patch};
+    if (!persist) return;
+    const now = savedAccess(host, env);
+    const same = now?.auth === 'password' && now.username === before.username && now.password === before.password;
+    if (same) saveAccess({...now, ...patch}, env);
   };
-  const withoutTokens = ({accessToken, accessTokenExpires, refresh, validUntil, lastUsed, ...rest}) => rest;
   const fresh = (a) => {
     const exp = jwtClaims(a.accessToken).exp;
     const until = Math.min(exp ? exp * 1000 : 0, a.accessTokenExpires ? Date.parse(a.accessTokenExpires) : Infinity);
     return a.mode === 'token' && a.accessToken && until - clock() > SKEW_MS;
+  };
+  function refusedError(why) {
+    return new AuthError(
+      why === 'basic'
+        ? `Basic was refused (ALLOW_BASIC_AUTH off, or a wrong password) and ${host} has no sign-in for tools: check the password (wx-admin login ${host}) or use a Company API Key (wx-admin login ${host} --api-key)`
+        : `The password of ${user} on ${host} was refused (changed?): wx-admin login ${host}`,
+    );
+  }
+  const fail = (e) => {
+    failed = e;
+    throw e;
   };
 
   const askCode = async (factor, {resent}) => {
@@ -300,29 +320,31 @@ export function passwordAccess(ctx, start, {persist = true} = {}) {
     );
   };
 
-  // The token sign-in with the saved password; else the reason, as an AuthError.
-  async function signInAgain(a) {
+  // The token sign-in with the saved password; else the reason, as an AuthError (remembered).
+  async function signInAgain(a, {afterBasic = false} = {}) {
     if (!a.password || tried.signIn) {
-      if (persist) store(withoutTokens(a));
-      throw new AuthError(
-        `The sign-in to ${host} has ended (unused for 36 hours, a restart of the PBX, or ended in WMS): wx-admin login ${host}`,
+      store(NO_TOKENS);
+      fail(
+        new AuthError(
+          `The sign-in to ${host} has ended (unused for 36 hours, a restart of the PBX, or ended in WMS): wx-admin login ${host}`,
+        ),
       );
     }
     tried.signIn = true;
     try {
       const t = await signIn({base, username: user, password: a.password, askCode, fetch});
-      store({...a, mode: 'token', ...t, lastUsed: isoOf(clock())});
+      store({mode: 'token', ...t, lastUsed: isoOf(clock())});
     } catch (e) {
-      if (!(e instanceof WmsAuthError)) throw e;
-      if (e.kind === 'credentials')
-        throw new AuthError(
-          `The password of ${user} on ${host} has changed (or the code was wrong): wx-admin login ${host}`,
-        );
+      if (!(e instanceof WmsAuthError)) fail(e);
+      if (e.kind === 'password' || (e.kind === 'missing' && afterBasic)) {
+        const why = e.kind === 'password' ? 'password' : 'basic';
+        store({...NO_TOKENS, password: undefined, refused: why});
+        fail(refusedError(why));
+      }
+      if (e.kind === 'code') fail(new AuthError(`The 2FA code was not accepted: wx-admin login ${host}`));
       if (e.kind === 'missing')
-        throw new AuthError(
-          `${host} accepts neither Basic nor the WMS sign-in for tools any more: wx-admin login ${host} --api-key`,
-        );
-      throw e;
+        fail(new AuthError(`${host} does not offer the WMS sign-in for tools: wx-admin login ${host} --api-key`));
+      fail(e);
     }
   }
 
@@ -330,7 +352,7 @@ export function passwordAccess(ctx, start, {persist = true} = {}) {
     if (tried.basic || a.basic === false || !a.password) return false;
     tried.basic = true;
     if (!(await probeBasic({base, username: user, password: a.password, fetch}))) return false;
-    store({...withoutTokens(a), mode: 'basic'});
+    store({...NO_TOKENS, lastUsed: undefined, mode: 'basic'});
     return true;
   }
 
@@ -350,36 +372,52 @@ export function passwordAccess(ctx, start, {persist = true} = {}) {
       if (!b.refresh) break;
       try {
         const t = await renew({base, refresh: b.refresh, fetch});
-        return store({...b, ...t, lastUsed: isoOf(clock())});
+        current = b;
+        return store({...t, lastUsed: isoOf(clock())});
       } catch (e) {
-        if (!(e instanceof WmsAuthError && e.kind === 'expired')) throw e;
+        if (!(e instanceof WmsAuthError && e.kind === 'expired')) fail(e);
       }
     }
     const latest = reread();
+    current = latest;
     if (await tryBasic(latest)) return;
     await signInAgain(latest);
   }
 
   return {
     async header() {
+      if (failed) throw failed;
       if (current.mode !== 'basic') await renewOrRecover();
       return current.mode === 'basic' ? basicHeader(current) : `Bearer ${current.accessToken}`;
     },
     // A 401 from the API: mode basic → the token sign-in; mode token → a renewal (the PBX refused a token it should
     // take). true: send the request again (once).
     async onUnauthorized() {
+      if (failed) throw failed;
       const a = reread();
       if (a.mode === 'basic') {
-        if (tried.signIn) return false;
-        await signInAgain({...a, mode: 'token'});
+        tried.basic = true; // this 401 was the Basic attempt of the command
+        current = a;
+        await signInAgain(a, {afterBasic: true});
         return true;
       }
-      store({...a, accessToken: undefined, accessTokenExpires: undefined});
+      current = a;
+      store({accessToken: undefined, accessTokenExpires: undefined});
       await renewOrRecover();
       return true;
     },
+    // status --check: a WMS sign-in tries Basic once (the attempt of the command), and moves to it when the PBX takes
+    // it.
+    async preferBasic() {
+      if (failed || current.mode !== 'token') return;
+      await tryBasic(reread());
+    },
   };
 }
+
+// The access itself was refused (not one object or one scope): a command that goes on per object must stop on it,
+// rather than send the same refused access again for every object.
+export const accessRefused = (e) => e instanceof AuthError || e?.status === 401;
 
 export class PbxError extends Error {
   constructor(message, status) {

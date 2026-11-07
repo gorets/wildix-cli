@@ -2,7 +2,7 @@
 // sign-in (mode token), and the moves between them when the PBX changes its mind.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {saveAccess, savedAccess} from '../src/pbx.mjs';
+import {removeAccess, saveAccess, savedAccess} from '../src/pbx.mjs';
 import {signIn} from '../src/wms-login.mjs';
 import {fakeWms} from './fake-wms.mjs';
 import {fakeJwt, run, tempConfigDir} from './helpers.mjs';
@@ -117,7 +117,7 @@ test('a changed password: its error, one sign-in and at most one Basic attempt',
   const before = {...pbx.state.attempts};
   const r = await check(env, pbx.fetch);
   assert.equal(r.code, 2);
-  assert.match(r.stderr, /password of admin on mypbx\.example\.com has changed/);
+  assert.match(r.stderr, /password of admin on mypbx\.example\.com was refused/);
   assert.equal(pbx.state.attempts.signIn - before.signIn, 1);
   assert.ok(pbx.state.attempts.basic - before.basic <= 1);
   assert.ok(!r.stderr.includes('pw') && !r.stderr.includes('N3w-pass'));
@@ -161,4 +161,54 @@ test('403 exits 2', async () => {
   const fetch = async () => new Response(JSON.stringify({type: 'error', reason: 'Access error'}), {status: 403});
   const r = await run(['user', 'list', '--pbx', HOST], {env, fetch, now});
   assert.equal(r.code, 2, r.stderr);
+});
+
+test('config backup in mode basic with a changed password: one Basic attempt, one sign-in, exit 2', async () => {
+  const pbx = fakeWms({now});
+  const env = home({auth: 'password', mode: 'basic', username: 'admin', password: 'pw'});
+  pbx.state.users.admin.password = 'N3w-pass';
+  const r = await run(['config', 'backup', '--to', `${env.WILDIX_CONFIG_DIR}/backup`, '--pbx', HOST], {
+    env,
+    now,
+    fetch: pbx.fetch,
+  });
+  assert.equal(r.code, 2, r.stderr);
+  assert.deepEqual(pbx.state.attempts, {basic: 1, signIn: 1});
+});
+
+test('a refused password is remembered: the next command does not contact the PBX', async () => {
+  const pbx = fakeWms({now});
+  const env = home({auth: 'password', mode: 'basic', username: 'admin', password: 'pw'});
+  pbx.state.users.admin.password = 'N3w-pass';
+  assert.equal((await check(env, pbx.fetch)).code, 2);
+  const calls = pbx.state.calls.length;
+  const r = await check(env, pbx.fetch);
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /wx-admin login mypbx\.example\.com/);
+  assert.equal(pbx.state.calls.length, calls);
+  assert.equal(savedAccess(HOST, env).password, undefined);
+});
+
+test('a logout by another process during a renewal is not undone', async () => {
+  const pbx = fakeWms({now, basic: false});
+  const env = home({...(await tokenAccess(pbx)), accessToken: 'x.eyJleHAiOjF9.y'});
+  const fetch = async (url, init) => {
+    if (new URL(url).pathname === '/api/v1/auth/refresh/') removeAccess(HOST, env);
+    return pbx.fetch(url, init);
+  };
+  await check(env, fetch);
+  assert.equal(savedAccess(HOST, env), undefined);
+});
+
+test('a new login by another process during a renewal is not overwritten', async () => {
+  const pbx = fakeWms({now, basic: false});
+  const env = home({...(await tokenAccess(pbx)), accessToken: 'x.eyJleHAiOjF9.y'});
+  const KEY = `wsk-v1-${'b'.repeat(93)}`;
+  const fetch = async (url, init) => {
+    if (new URL(url).pathname === '/api/v1/auth/refresh/')
+      saveAccess({host: HOST, port: 443, auth: 'apikey', key: KEY}, env);
+    return pbx.fetch(url, init);
+  };
+  await check(env, fetch);
+  assert.equal(savedAccess(HOST, env).key, KEY);
 });

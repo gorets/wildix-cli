@@ -59,20 +59,20 @@ test('email factor: an empty answer has the PBX send the code again, then the co
   assert.deepEqual(resent, [false, true]);
 });
 
-test('a wrong password is kind credentials with the PBX reason, after one attempt', async () => {
+test('a wrong password is kind password with the PBX reason, after one attempt', async () => {
   const pbx = fakeWms({now});
   await assert.rejects(
     signIn({base: BASE, username: 'admin', password: 'no', askCode: noCode, fetch: pbx.fetch}),
-    (e) => kindOf('credentials')(e) && /Login or password incorrect/.test(e.message) && !e.message.includes('no'),
+    (e) => kindOf('password')(e) && /Login or password incorrect/.test(e.message) && !e.message.includes('no'),
   );
   assert.equal(pbx.state.attempts.signIn, 1);
 });
 
-test('a wrong code is kind credentials; the code is tried once', async () => {
+test('a wrong code is kind code; the code is tried once', async () => {
   const pbx = fakeWms({now, users: {admin: {password: 'pw', factor: 'googleauthenticator', code: '1'}}});
   await assert.rejects(
     signIn({base: BASE, username: 'admin', password: 'pw', askCode: async () => '2', fetch: pbx.fetch}),
-    kindOf('credentials'),
+    kindOf('code'),
   );
   assert.equal(pbx.state.calls.filter((c) => c.body?.type === 'next').length, 1);
 });

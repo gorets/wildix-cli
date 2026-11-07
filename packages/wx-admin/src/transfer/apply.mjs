@@ -2,6 +2,7 @@
 // first). ACL groups and dialplans point at each other (in cycles too), so the new ones are first made bare and get
 // their content in their turn. Every marker becomes the value of the target (ids of objects made in this run
 // included); an object that fails is `failed`, and everything that needs it `skip`ped with it as `because`.
+import {accessRefused} from '../pbx.mjs';
 import {TRANSFER_KINDS} from './kinds.mjs';
 import {fromPortable, keyOf, MissingValue} from './refs.mjs';
 
@@ -55,6 +56,7 @@ export async function applyPlan(client, plan, chosen, {secrets = {}, selfDn, onE
       remember(it, await TRANSFER_KINDS[it.kind].create(client, empty, it.name));
       bare.add(it.key);
     } catch (e) {
+      if (accessRefused(e)) throw e;
       report({key: it.key, action: 'failed', error: e.message});
     }
   }
@@ -102,6 +104,7 @@ export async function applyPlan(client, plan, chosen, {secrets = {}, selfDn, onE
         report({key: it.key, action: 'create', id: String(id)});
       }
     } catch (e) {
+      if (accessRefused(e)) throw e;
       report({key: it.key, action: 'failed', error: e.message});
     }
   }

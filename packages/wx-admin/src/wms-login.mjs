@@ -11,7 +11,7 @@ import {jwtClaims} from 'wldx-core/auth';
 import {AuthError} from 'wldx-core/errors';
 import {userAgent} from 'wldx-core/program';
 
-// kind: 'credentials' (a wrong login, password or code), 'missing' (no token sign-in on this WMS: 404), 'refused'
+// kind: 'password' (a wrong login or password), 'code' (a wrong second-factor code), 'missing' (no token sign-in on this WMS: 404), 'refused'
 // (403: blocked after many attempts, a new location to confirm, not allowed), 'expired' (the refresh token is no
 // longer accepted), 'redirect', 'failed' (anything else), 'unreachable'.
 export class WmsAuthError extends AuthError {
@@ -99,7 +99,7 @@ function refusal(status, reason, what, unauthorizedKind) {
 export async function signIn({base, username, password, askCode, fetch}) {
   const what = 'the sign-in';
   const first = await post(base, '/api/v1/auth/login/', {login: username, password, remember: '1'}, {fetch, what});
-  if (!first.res.ok || first.data?.type === 'error') throw refusal(first.res.status, first.reason, what, 'credentials');
+  if (!first.res.ok || first.data?.type === 'error') throw refusal(first.res.status, first.reason, what, 'password');
   const factor = first.data?.result?.next;
   if (!factor) return tokensOf(first.res, first.data, what);
 
@@ -124,10 +124,10 @@ export async function signIn({base, username, password, askCode, fetch}) {
       resent = true;
     }
   }
-  if (!code) throw new WmsAuthError('No code was given', 'credentials');
+  if (!code) throw new WmsAuthError('No code was given', 'code');
   const second = await post(base, '/api/v1/auth/login/', {type: 'next', code, remember: '1'}, {fetch, cookie, what});
   if (!second.res.ok || second.data?.type === 'error')
-    throw refusal(second.res.status, second.reason || 'The code was not accepted', what, 'credentials');
+    throw refusal(second.res.status, second.reason || 'The code was not accepted', what, 'code');
   return tokensOf(second.res, second.data, what);
 }
 

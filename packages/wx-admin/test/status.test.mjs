@@ -121,3 +121,32 @@ test('--check moves a WMS sign-in to Basic when the PBX now takes it', async () 
   assert.equal(savedAccess('w.wildixin.com', env).mode, 'basic');
   assert.equal(JSON.parse(r.stdout).pbxs[0].mode, 'basic');
 });
+
+test('--check with a refused refresh and a changed password: one Basic attempt, one sign-in', async () => {
+  const pbx = fakeWms({now, basic: false});
+  const t = await signIn({base: 'https://x', username: 'admin', password: 'pw', askCode: () => '', fetch: pbx.fetch});
+  const env = home();
+  saveAccess(
+    {
+      host: 'w.wildixin.com',
+      port: 443,
+      auth: 'password',
+      mode: 'token',
+      username: 'admin',
+      password: 'pw',
+      ...t,
+      accessToken: 'x.eyJleHAiOjF9.y',
+      lastUsed: new Date(T0).toISOString(),
+    },
+    env,
+  );
+  pbx.state.sessions.clear();
+  pbx.state.users.admin.password = 'N3w-pass';
+  const before = {...pbx.state.attempts};
+  const r = await status(env, ['--check'], {fetch: pbx.fetch});
+  assert.equal(r.code, 1);
+  assert.deepEqual(
+    {basic: pbx.state.attempts.basic - before.basic, signIn: pbx.state.attempts.signIn - before.signIn},
+    {basic: 1, signIn: 1},
+  );
+});

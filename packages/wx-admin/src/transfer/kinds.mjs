@@ -3,6 +3,7 @@
 // answers the new id (re-reading the list where the PBX answers only "Success"), update sends the whole object (the
 // PBX wants every field on a PUT).
 import {apiPath, query} from 'wldx-core/http';
+import {accessRefused} from '../pbx.mjs';
 
 const listOf = (r) => (Array.isArray(r) ? r : (r?.records ?? []));
 const without = (o, keys) => Object.fromEntries(Object.entries(o ?? {}).filter(([k]) => !keys.includes(k)));
@@ -251,6 +252,7 @@ export async function readKinds(client, kinds, {dbFamilies, info = () => {}} = {
     try {
       out[kind] = await TRANSFER_KINDS[kind].read(client, {dbFamilies});
     } catch (e) {
+      if (accessRefused(e)) throw e;
       info(`${kind}: not read (${e.message})`);
       out[kind] = {error: e.message};
     }

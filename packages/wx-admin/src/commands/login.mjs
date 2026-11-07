@@ -133,9 +133,10 @@ async function passwordAccess(ctx, {host, port, kind}) {
       throw new AuthError(
         noBasic
           ? `${host} does not offer the WMS sign-in for tools (a newer WMS has it): wx-admin login ${host} --api-key`
-          : `${host} accepts neither Basic (ALLOW_BASIC_AUTH is off) nor the WMS sign-in for tools (a newer WMS has it): wx-admin login ${host} --api-key`,
+          : `Basic was refused (ALLOW_BASIC_AUTH off, or a wrong password) and ${host} has no sign-in for tools (a newer WMS has it): check the password, or use a Company API Key (wx-admin login ${host} --api-key)`,
       );
-    if (e.kind === 'credentials') throw new AuthError(`${host} refused the sign-in of ${user}: ${e.message}`);
+    if (e.kind === 'password' || e.kind === 'code')
+      throw new AuthError(`${host} refused the sign-in of ${user}: ${e.message}`);
     throw e;
   }
 }
