@@ -116,3 +116,31 @@ test('inside a secret container a value is masked, whatever its shape', () => {
     authorization: {basic: {username: 'u', password: MASK}},
   });
 });
+
+test('a change list hides before and after when its path names a secret', () => {
+  const out = maskCloud({
+    changes: [
+      {path: 'handler.mcp.authorization.customHeaders.X-Api-Key', before: 'OLD', after: 'NEW'},
+      {path: '/engine/sqs/key', before: 'AKIAOLD', after: 'AKIANEW'},
+      {path: '/handler/mcp/authorization', after: {customHeaders: {Authorization: 'Bearer N'}}},
+      {path: '/env', after: [{name: 'DB', value: 'pw'}]},
+      {path: '/engine/ai/model', before: 'a', after: 'b'},
+    ],
+  });
+  assert.deepEqual(out.changes[0], {
+    path: 'handler.mcp.authorization.customHeaders.X-Api-Key',
+    before: MASK,
+    after: MASK,
+  });
+  assert.deepEqual(out.changes[1], {path: '/engine/sqs/key', before: MASK, after: MASK});
+  assert.deepEqual(out.changes[2].after, {customHeaders: {Authorization: MASK}});
+  assert.deepEqual(out.changes[3].after, [{name: 'DB', value: MASK}]);
+  assert.deepEqual(out.changes[4], {path: '/engine/ai/model', before: 'a', after: 'b'});
+});
+
+test('inside a secret container a key is masked even next to a name', () => {
+  assert.deepEqual(maskCloud({apiKey: {name: 'main', key: 'sk-live-X'}}), {apiKey: {name: 'main', key: MASK}});
+  assert.deepEqual(maskCloud({apiKeys: [{id: 'k1', name: 'n', key: 'X'}]}), {
+    apiKeys: [{id: 'k1', name: 'n', key: MASK}],
+  });
+});

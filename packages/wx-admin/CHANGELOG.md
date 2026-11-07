@@ -10,6 +10,9 @@
   Still masked: passwords, tokens, API keys, client secrets, the secret of a new agent API key, service account
   credentials (whole), secret header values, custom headers, sandbox environment values, and any `value` inside a
   field named as a secret.
+- Fixed: the changes of `CompareAgentVersions`, `CompareToolVersions` and the audit log (`{path, before, after}`)
+  showed a secret value when its path named one (a custom header, an SQS key): both sides are now masked. A `key`
+  inside a field named as a secret is masked even next to a name.
 
 ## 1.4.0 — 2026-11-07
 
