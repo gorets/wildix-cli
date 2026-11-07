@@ -6,7 +6,7 @@ import {pbxClient} from '../src/pbx.mjs';
 import {tempConfigDir} from './helpers.mjs';
 
 export const COLLECTIONS = {
-  '/PBX/AclGroups/': {post: 'object'},
+  '/PBX/AclGroups/': {post: 'object', dn: (id) => `gid=${id},o=com0,dc=wildix`},
   '/PBX/Colleagues/': {post: 'object', paged: true},
   '/Trunks/Sip/': {post: 'success'},
   '/Trunks/Groups/': {post: 'success'},
@@ -65,7 +65,8 @@ export function fakePbx(state, {failOn = () => false} = {}) {
       return item ? result(item) : reply(404, {type: 'error', reason: 'Not found'});
     }
     if (init.method === 'POST' && !rest) {
-      const made = {...body, id: String(next++)};
+      const id = String(next++);
+      const made = {...body, id, ...(conf.dn ? {dn: conf.dn(id)} : {})};
       if (conf.multipart) {
         made.csv = body.upload ? await body.upload.text() : '';
         delete made.upload;
