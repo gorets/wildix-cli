@@ -45,7 +45,7 @@ Rules for changes (and for AI agents that make them): [AGENTS.md](AGENTS.md), an
 The three packages are released together with one version; a command line depends on the core of exactly its
 version.
 
-1. `node tools/version.mjs X.Y.Z` (the three `package.json` and the version line of the READMEs), a `CHANGELOG.md`
+1. `node tools/version.mjs X.Y.Z` (the three `package.json` and the version line of their READMEs), a `CHANGELOG.md`
    entry in each package that changed.
 2. Commit, tag `vX.Y.Z`, push the tag: `.github/workflows/release.yml` checks the versions against the tag, runs the
    tests, packs the tarballs and **stages** each package with provenance through npm trusted publishing (no npm

@@ -29,7 +29,7 @@ packages/<cli>/src/cli.mjs        setProgram() and the spec of the command line;
 packages/<cli>/src/commands/      its commands; index.mjs lists them in the order of the help
 packages/<cli>/bin/<cli>.mjs      entry: sets process.exitCode (never process.exit: it cuts piped output)
 tools/pack.mjs                    packs the three into dist/ and checks the tarballs (the release publishes them)
-tools/version.mjs                 sets one version in the three packages and the two READMEs
+tools/version.mjs                 sets one version in the three packages and their READMEs
 ```
 
 The command lines import the core by package name (`import {request} from 'wldx-core/http'`); the core never

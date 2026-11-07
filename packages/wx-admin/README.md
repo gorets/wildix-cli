@@ -18,8 +18,9 @@ npx wldx-admin-cli --help                     # without installing
 
 Requires Node.js 22 or newer. One dependency: [`wldx-core`](https://github.com/gorets/wildix-cli/tree/main/packages/core), the core it shares with `wx`, from the
 same repository and of the same version.
-Unofficial: not made or supported by Wildix. It uses the PBX API as
-documented on the PBX (`https://<pbx>/api/v1/doc/`), which may change between WMS versions.
+
+Unofficial: not made or supported by Wildix. It uses the PBX API as documented on the PBX
+(`https://<pbx>/api/v1/doc/`), which may change between WMS versions.
 
 ## Access to a PBX
 
@@ -39,10 +40,6 @@ refused while it is set.
 
 ### Several PBX
 
-`--all-pbx` runs a command that only reads on every PBX (saved access, then the x-bees login's) and prints each
-result under its PBX: `wx-admin --all-pbx system info`, `wx-admin --all-pbx user registrations`.
-
-
 Which PBX a command works on:
 
 1. `--pbx PBX` (anywhere on the command line): `name.wildixin.com`, a bare `name` (= `name.wildixin.com`), an IP
@@ -53,6 +50,9 @@ Which PBX a command works on:
 
 `wx-admin pbx list` shows them (`*` is the default), `wx-admin pbx check` says which one a command would use and
 whether it accepts the access. Saved access lives in `~/.wildix/admin/pbx/<host>.json` (folder 0700, files 0600).
+
+`--all-pbx` runs a command that only reads on every PBX (saved access, then the x-bees login's) and prints each
+result under its PBX: `wx-admin --all-pbx system info`, `wx-admin --all-pbx user registrations`.
 
 ## Dialplans
 
@@ -354,11 +354,16 @@ Your profiles (the e-mails you are logged in with) and the default one.
 | `wx-admin profile list` | your profiles; * marks the default one |
 | `wx-admin profile use <e-mail>` | make a profile the default one (used when no --profile is given) |
 
-### Login and profiles
+### wx-admin api
 
 | Command | What it does |
 | --- | --- |
 | `wx-admin api <method> <path> [--data JSON \| --data-file FILE\|-] [--query KEY=VALUE]... [--yes]` | call any PBX API operation (GET reads; other methods change the PBX and need --yes) |
+
+### Login and profiles
+
+| Command | What it does |
+| --- | --- |
 | `wx-admin login [<e-mail>] [--send-code \| --code CODE]` | log in with a one-time code sent to your e-mail |
 | `wx-admin logout [--profile EMAIL] [--everywhere]` | log out: revoke the session of this device, or of every device |
 | `wx-admin status [--profile EMAIL] [--check]` | who you are logged in as, until when, and the version of wx-admin |
@@ -397,7 +402,9 @@ pnpm --filter wldx-admin-cli test           # node:test, no network (fake PBX)
 node packages/wx-admin/bin/wx-admin.mjs -h  # this checkout, without installing
 ```
 
-See [AGENTS.md](https://github.com/gorets/wildix-cli/blob/main/packages/wx-admin/AGENTS.md). After changing commands, regenerate the reference: `node tools/readme-commands.mjs`.
+See [AGENTS.md](https://github.com/gorets/wildix-cli/blob/main/packages/wx-admin/AGENTS.md). In `packages/wx-admin`: `node test/dev.mjs <module> <args>`
+runs a command module that is not listed yet; after changing commands, regenerate the reference with
+`node tools/readme-commands.mjs` and paste it between the markers.
 
 ## Releasing
 

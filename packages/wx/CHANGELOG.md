@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 — unreleased
+## 1.1.0 — 2026-11-07
 
 - The repository is a pnpm workspace: `wx` is `packages/wx`, next to `wx-admin` (`packages/wx-admin`, npm
   `wldx-admin-cli`) and their shared core `wldx-core` (`packages/core`): the router, output, completion, login,

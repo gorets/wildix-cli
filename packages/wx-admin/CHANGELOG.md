@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 — unreleased
+## 1.1.0 — 2026-11-07
 
 - The first published version. It starts at 1.1.0, the version of `wx` and of their shared core: the three are
   released together from the pnpm workspace of `gorets/wildix-cli` (`packages/wx-admin`). The router, output,

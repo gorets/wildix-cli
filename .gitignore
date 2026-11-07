@@ -11,3 +11,6 @@ announce/
 
 # Copied into each package by tools/pack.mjs
 packages/*/LICENSE
+
+# Plan execution workspaces
+.superpowers/

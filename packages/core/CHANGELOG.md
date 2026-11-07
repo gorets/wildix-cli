@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.0 — unreleased
+## 1.1.0 — 2026-11-07
 
 - The first version: the shared core of `wx` (`wldx-cli`) and `wx-admin` (`wldx-admin-cli`), taken out of their
   copies. `createMain(spec)`: the router, the global options anywhere (those of the spec too: `--pbx`, `--all-pbx`),

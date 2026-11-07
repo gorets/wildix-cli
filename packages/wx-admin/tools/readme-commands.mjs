@@ -20,8 +20,11 @@ for (const [name, g] of Object.entries(GROUPS)) {
   for (const cmd of Object.values(g.commands)) out.push(`| \`${cell(cmd.usage)}\` | ${cell(cmd.summary)} |`);
   out.push('');
 }
+const {api, ...login} = COMMANDS;
+out.push('### wx-admin api', '', '| Command | What it does |', '| --- | --- |');
+out.push(`| \`${cell(api.usage)}\` | ${cell(api.summary)} |`, '');
 out.push('### Login and profiles', '', '| Command | What it does |', '| --- | --- |');
-for (const cmd of Object.values(COMMANDS)) out.push(`| \`${cell(cmd.usage)}\` | ${cell(cmd.summary)} |`);
+for (const cmd of Object.values(login)) out.push(`| \`${cell(cmd.usage)}\` | ${cell(cmd.summary)} |`);
 out.push(
   '| `wx-admin completion [bash\\|zsh\\|fish]` | the shell completion script (default: the shell of `$SHELL`) |',
 );
