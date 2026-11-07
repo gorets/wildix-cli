@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.4.0 — unreleased
+## 1.4.0 — 2026-11-07
 
 - Added: `wx-admin login [<host>]` signs in to the PBX itself, with a menu that puts first a **Company API Key**
   (recommended, and why) and then the **WMS login and password** of an administrator. With a login and password,
@@ -14,7 +14,7 @@
   shows the PBX signed in to, the default one, the access and until when.
 - Changed: the PBX of a command is `--pbx`, else the default PBX (the first one signed in to, or `pbx use`), else the
   only one signed in to. A 403 from the PBX exits 2 (the access was refused), as the help says. `acl list` and
-  `acl get` (were `acl groups` and `acl group`).
+  `acl get` (were `acl groups` and `acl group`). `user list` shows the e-mail of each user (phones still with `--full`).
 - **Removed:** the x-bees login from `wx-admin` (`login <e-mail>`, its `logout`, `profile`, `--profile`, the PBX of
   the x-bees login): customer administrators have no x-bees account. `wx` keeps it. Removed `pbx add` and
   `pbx remove` (`login` and `logout`) and `pbx use --login`. Access saved by 1.3.0 with Basic is not read: sign in

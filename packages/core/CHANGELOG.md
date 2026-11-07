@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.4.0 — unreleased
+## 1.4.0 — 2026-11-07
 
 - A command line without the x-bees login: `profiles: false` in the spec drops `--profile`, its help line and
   completion, and the token of the context (`wx-admin`).

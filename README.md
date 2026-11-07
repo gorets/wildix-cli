@@ -5,7 +5,7 @@ Unofficial command lines for Wildix, MIT. Not made or supported by Wildix.
 | Command | npm | For | |
 | --- | --- | --- | --- |
 | `wx` | [`wldx-cli`](https://www.npmjs.com/package/wldx-cli) | everyone: chats, calls and meetings on record, queue reports, what is going on now, your phone; acts as you | [README](packages/wx/README.md) |
-| `wx-admin` | [`wldx-admin-cli`](https://www.npmjs.com/package/wldx-admin-cli) | PBX administrators: the PBX REST API, several PBX at once, configuration as files and moved to another PBX, the cloud services of the company (knowledge base, voicebots, WIM tools, Wilma) | [README](packages/wx-admin/README.md) |
+| `wx-admin` | [`wldx-admin-cli`](https://www.npmjs.com/package/wldx-admin-cli) | PBX administrators, no x-bees account needed (a Company API Key, or the WMS login and password with 2FA): the PBX REST API, several PBX at once, configuration as files and moved to another PBX, the cloud services of the company (knowledge base, voicebots, WIM tools, Wilma) | [README](packages/wx-admin/README.md) |
 
 ```sh
 npm i -g wldx-cli          # wx

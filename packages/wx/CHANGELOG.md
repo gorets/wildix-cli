@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.4.0 — unreleased
+## 1.4.0 — 2026-11-07
 
 - Nothing of its own: released with `wx-admin` 1.4.0 (its own sign-in to the PBX) and `wldx-core` 1.4.0. `wx` keeps
   the x-bees login.
