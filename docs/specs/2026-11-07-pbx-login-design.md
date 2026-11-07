@@ -69,7 +69,8 @@ Authenticator:
 ### `wx-admin login [<host>]`
 
 ```
-wx-admin login [<host>] [--api-key | --password [--user NAME] [--code CODE] | --basic [--user NAME] | --token]
+wx-admin login [<host>] [--api-key | --password [--no-basic] [--user NAME] [--code CODE] | --basic [--user NAME]
+               | --token]
                [--port N] [--no-check]
 ```
 
@@ -112,6 +113,10 @@ How should wx-admin sign in to mypbx.wildixin.com?
   Basic. The password is saved in ~/.wildix/admin/pbx/mypbx.wildixin.com.json (0600): Basic bypasses 2FA, keep this
   computer safe.` or `… with the WMS sign-in (2FA), until 2026-11-22; the password is saved so that wx-admin can sign
   in again by itself (a 2FA code will be asked).`
+- **`--no-basic`**: the WMS token sign-in only (steps 2–4), and the access never tries Basic later (`"basic": false`
+  saved). With `--no-basic` the password is **not** saved: the sign-in ends when the refresh token does, and a new
+  `wx-admin login` asks for the password and the code. For an administrator who keeps nothing on disk that opens the
+  PBX without 2FA.
 - **`--basic`**: Basic only (step 1), no token fallback at sign-in; the access is the same kind `password`, mode
   `basic`. **`--token`** (Simple Token): flag only, as `pbx add` today (deprecated by Wildix).
 - Then, unless `--no-check`, one read of the PBX with the new access (as `pbx add`), the serial recorded. On success
