@@ -248,11 +248,6 @@ test('a secret that was not given is a MissingValue', () => {
   assert.throws(() => fromPortable('trunks-sip', {register: {$secret: 'register'}}, resolve), /secret register/);
 });
 
-test('without the source serial (not readable), every pbxid admin subject is the PBX itself', () => {
-  const p = toPortable(snapshot(), {serial: null, host: SOURCE.host});
-  assert.deepEqual(obj(p, 'acl-groups/Sales').adminRules[0].subject, {$self: 'pbx'});
-});
-
 test('a codec key is not a secret; secret paths use [i] for arrays', () => {
   const p = toPortable(
     {
@@ -269,4 +264,40 @@ test('a codec key is not a secret; secret paths use [i] for arrays', () => {
   const t = p.kinds['trunks-sip'][0].data;
   assert.deepEqual(t.settingsPbx.audioCodecs, [{key: 'alaw'}]);
   assert.deepEqual(t.keys, [{password: {$secret: 'keys[0].password'}}]);
+});
+
+test('review 5: a soft user reference stays literal (an extension is portable), only noted as soft', () => {
+  const p = toPortable(
+    {
+      users: [{id: '1', name: '101', data: {extension: '101'}}],
+      dialplans: [
+        {
+          id: '1',
+          name: 'm',
+          data: {
+            name: 'm',
+            includedDialplans: [],
+            numbers: [
+              {number: '1', apps: [{name: 'GotoIfUserStatus', params: {user: '101', dialplan: '', number: ''}}]},
+            ],
+          },
+        },
+      ],
+    },
+    SOURCE,
+  );
+  assert.equal(p.kinds.dialplans[0].data.numbers[0].apps[0].params.user, '101');
+  assert.deepEqual(p.soft['dialplans/m'], ['users/101']);
+  assert.equal(p.needs['dialplans/m'], undefined);
+});
+
+test('review 8: a pbxid of another PBX stays literal and is unresolved; without the source serial nothing becomes $self', () => {
+  const s = snapshot();
+  s['acl-groups'][0].data.adminRules.push({subject: 'pbxid=cccc00000009,dc=wildix', operation: 'epbx'});
+  const p = toPortable(s, SOURCE);
+  const rules = obj(p, 'acl-groups/Sales').adminRules;
+  assert.equal(rules[2].subject, 'pbxid=cccc00000009,dc=wildix');
+  assert.ok(p.unresolved.some((u) => u.value === 'pbxid=cccc00000009,dc=wildix'));
+  const q = toPortable(snapshot(), {serial: null, host: SOURCE.host});
+  assert.ok(!JSON.stringify(q.kinds).includes('$self'));
 });

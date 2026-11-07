@@ -13,6 +13,7 @@ import {select} from 'wldx-core/select';
 import {pbxClient, readSerial} from '../pbx.mjs';
 import {readExport, writeExport} from '../transfer/folder.mjs';
 import {readKinds, TRANSFER_KINDS} from '../transfer/kinds.mjs';
+import {shellArg} from '../transfer/next-steps.mjs';
 import {runImport} from '../transfer/run.mjs';
 import {toPortable} from '../transfer/refs.mjs';
 import {chooseExport, closure, dbFamiliesOf, selectFrom} from '../transfer/selection.mjs';
@@ -201,9 +202,10 @@ const interactive = (ctx) => Boolean(ctx.stdin?.isTTY && ctx.stderr?.isTTY);
 // A PBX read for a transfer: its objects turned portable (markers instead of references), with where it is.
 export async function exportOf(ctx, client, {users, dbFamily = []}) {
   const serial = await readSerial(client);
+  // The safety scan and the ACL admin rules need the serial: without it, nothing is carried.
   if (!serial)
-    ctx.info(
-      'The serial of the PBX is not readable with this access: every pbxid in ACL admin rules is taken as this PBX',
+    throw new UsageError(
+      `The serial of ${client.target.host} is not readable with this access (GET /PBX/settings/, scope pbx:read): it is needed to leave out everything bound to it. Use an access that can read it.`,
     );
   let wms;
   try {
@@ -361,7 +363,7 @@ export const groups = {
           const {manifest, kinds} = await readExport(ctx, ctx.positionals[0]);
           const portable = {...manifest, kinds};
           const client = await pbxClient(ctx);
-          const rerun = `wx-admin config import ${ctx.positionals[0]} --pbx ${client.target.host}`;
+          const rerun = `wx-admin config import ${shellArg(ctx.positionals[0])} --pbx ${shellArg(client.target.host)}`;
           return finish(
             ctx,
             await runImport(ctx, {
@@ -405,7 +407,7 @@ export const groups = {
           const carried = selectFrom(portable, new Set([...closure(portable, all)].filter((k) => !bound.has(k))));
           for (const x of portable.bound)
             ctx.info(`not carried, bound to ${source.target.host}: ${x.kind}/${x.name} (${x.found} in ${x.path})`);
-          const rerun = `wx-admin config copy --from ${v.from} --to ${v.to}`;
+          const rerun = `wx-admin config copy --from ${shellArg(v.from)} --to ${shellArg(v.to)}${v.users ? ' --users' : ''}`;
           return finish(
             ctx,
             await runImport(ctx, {portable: carried, from: source.target.host, client, values: v, rerun}),

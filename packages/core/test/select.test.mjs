@@ -153,3 +153,17 @@ test('refuses without a terminal', async () => {
   );
   assert.deepEqual(io.stdin.raw, []);
 });
+
+test('review 7: labels, badges, notes and reasons are drawn without terminal escapes or line breaks', async () => {
+  const groups = [
+    {
+      id: 'g',
+      label: 'G\x1b]0;evil\x07',
+      items: [{id: 'a', label: 'a\x1b]52;c;Zm9v\x07\nb', badge: 'n\x1b[2J', note: 'x\ry', disabled: 'r\x1b]0;t\x07'}],
+    },
+  ];
+  const io = terminal(['\r']);
+  await select(io, {title: 'T\x1b]0;x\x07', groups, requires: () => []});
+  assert.ok(!/\x1b\]|\x1b\[2J|\x07/.test(io.stderr.text), JSON.stringify(io.stderr.text));
+  assert.ok(!/a\x1b|a\nb/.test(io.stderr.text));
+});

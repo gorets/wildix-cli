@@ -5,6 +5,7 @@
 //   ↑/↓ or k/j move · space ticks (on a group: the whole group) · →/← open and close a group · a: the whole group
 //   / filters by name (enter ends the filter, esc clears it) · enter confirms · esc or Ctrl-C cancels
 import {UsageError} from './errors.mjs';
+import {clean} from './format.mjs';
 
 export function createModel({groups, requires = () => []}) {
   const items = new Map();
@@ -146,7 +147,12 @@ export function select(io, {title, groups, requires}) {
   let drawn = 0;
   let filtering = false;
   const paint = () => {
-    const lines = draw(model, title, height, filtering).map((l) => l.slice(0, (stderr.columns ?? 80) - 1));
+    // Labels, notes and reasons come from a PBX or a file: no terminal escapes, no line breaks.
+    const lines = draw(model, title, height, filtering).map((l) =>
+      clean(l)
+        .replace(/\x1b\[[0-9;]*m|[\r\n\t]/g, ' ')
+        .slice(0, (stderr.columns ?? 80) - 1),
+    );
     stderr.write(`${drawn ? `\x1b[${drawn}A` : ''}\x1b[J${lines.join('\n')}\n`);
     drawn = lines.length;
   };

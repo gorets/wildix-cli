@@ -153,3 +153,59 @@ test('copy refuses the same PBX', async () => {
   assert.equal(r.code, 64);
   assert.match(r.stderr, /the same PBX/);
 });
+
+test('review 6: in the picker an object brings only the new objects it needs, never one that differs', async () => {
+  const {pickerRequires} = await import('../src/transfer/run.mjs');
+  const plan = {
+    items: [
+      {key: 'dialplans/main', state: 'new', needs: ['queues/q', 'timetables/t']},
+      {key: 'queues/q', state: 'differs', needs: []},
+      {key: 'timetables/t', state: 'new', needs: []},
+    ],
+  };
+  assert.deepEqual(pickerRequires(plan)('dialplans/main'), ['timetables/t']);
+});
+
+test('review 4: queue members are checked against the users of the target', async () => {
+  const dir = path.join(tempConfigDir(), 'exp');
+  const portable = toPortable(
+    {queues: [{id: '5', name: 'q', data: {title: 'q', members: ['101@internalcalls'], settings: {}}}]},
+    {serial: 'aaaa00000001', host: 'a.wildixin.com'},
+  );
+  writeExport({env: {}, cwd: tempConfigDir()}, dir, {source: {host: 'a', wms: '7'}, portable});
+  const state = {...TARGET(), '/PBX/Colleagues/': [{id: '9', extension: '101', name: 'Ann'}]};
+  const r = await run(['config', 'import', dir, '--pbx', 'demo', '--all', '--dry-run', '--log', tempConfigDir()], {
+    env: env(),
+    fetch: fakePbx(state).fetch,
+  });
+  assert.equal(r.code, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout).plan.items[0].warnings, []);
+});
+
+test('review 1: the next step of a run without passwords finishes it: the dialplan made bare gets its rules', async () => {
+  const first = await importIt(['--all', '--yes']);
+  const step = first.out.nextSteps.find((s) => /password/.test(s.what));
+  const only = /--only (\S+) --overwrite/.exec(step.command)[1];
+  const logDir = tempConfigDir();
+  const r = await run(
+    [
+      'config',
+      'import',
+      folder(),
+      '--pbx',
+      'demo',
+      '--log',
+      logDir,
+      '--only',
+      only,
+      '--overwrite',
+      '--yes',
+      '--secrets',
+      SECRETS(),
+    ],
+    {env: env(), fetch: first.pbx.fetch},
+  );
+  assert.equal(r.code, 0, r.stderr);
+  const main = first.pbx.state['/PBX/Dialplans/'].find((d) => d.name === 'main');
+  assert.equal(main.numbers.length, 1);
+});

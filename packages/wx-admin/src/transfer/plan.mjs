@@ -23,11 +23,18 @@ export function makePlan(portable, target, {serial, host, licenses, sounds, moh,
   const targetPortable = toPortable(target, {serial, host});
   const theirs = new Map();
   const ids = {};
+  const twice = new Set(); // names that two objects of a kind share on the target: ambiguous
   for (const [kind, list] of Object.entries(target)) {
     if (!Array.isArray(list)) continue;
     for (const o of list) {
       const key = keyOf(kind, o.name);
-      ids[key] = {id: o.id, ...(o.dn ? {dn: o.dn} : {}), name: o.name};
+      if (Object.hasOwn(ids, key)) twice.add(key);
+      ids[key] = {
+        id: o.id,
+        ...(o.dn ? {dn: o.dn} : {}),
+        name: o.name,
+        ...(kind === 'trunks-sip' && typeof o.data?.name === 'string' ? {login: o.data.name} : {}),
+      };
     }
   }
   for (const [kind, list] of Object.entries(targetPortable.kinds))
@@ -48,7 +55,8 @@ export function makePlan(portable, target, {serial, host, licenses, sounds, moh,
         warnings: [],
         needs: [...new Set(refsOf(o.data).map((r) => keyOf(r.kind, r.name)))].filter((k) => k !== key),
       };
-      if (counts.get(o.name) > 1)
+      if (twice.has(key)) Object.assign(it, {state: 'blocked', reason: `two objects named ${o.name} on ${host}`});
+      else if (counts.get(o.name) > 1)
         Object.assign(it, {state: 'blocked', reason: `two objects named ${o.name} in the export`});
       else if (bound.has(key)) Object.assign(it, {state: 'blocked', reason: 'bound to the source PBX'});
       else if (target[kind] && !Array.isArray(target[kind]))
@@ -114,7 +122,13 @@ export function makePlan(portable, target, {serial, host, licenses, sounds, moh,
       const mine = byKey.get(k);
       if (Object.hasOwn(ids, k) || (mine && mine.state !== 'blocked')) continue;
       const value = splitKey(k).name;
-      warn(from, {type: 'member', value, text: `${value} is not a user on ${host} (nor a user of the export)`});
+      if (!Array.isArray(target.users))
+        warn(from, {
+          type: 'not-checked',
+          value,
+          text: `the user ${value} was not checked on ${host} (its users were not read)`,
+        });
+      else warn(from, {type: 'member', value, text: `${value} is not a user on ${host} (nor a user of the export)`});
     }
   }
   for (const x of portable.external ?? [])

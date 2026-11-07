@@ -24,47 +24,86 @@ const fold = (names) =>
   names.length <= MAX ? names.join(', ') : `${names.slice(0, MAX).join(', ')} … and ${names.length - MAX} more`;
 const objectOf = (key, where) => ({...splitKey(key), ...(where ? {where} : {})});
 
+// One argument for a POSIX shell: as it is when it is plain, else in single quotes. Names and values come from the
+// PBX or the folder, so every one that goes into a command is quoted.
+export const shellArg = (s) =>
+  /^[A-Za-z0-9_@%+=:,./-]+$/.test(String(s)) ? String(s) : `'${String(s).replace(/'/g, "'\\''")}'`;
+// The value of --only for these keys: kind:name, with \ and , in names escaped (parseOnly reads them back).
+export const onlyArg = (keys) =>
+  shellArg(
+    keys
+      .map((k) => {
+        const {kind, name} = splitKey(k);
+        return `${kind}:${name.replace(/\\/g, '\\\\').replace(/,/g, '\\,')}`;
+      })
+      .join(','),
+  );
+
 export function nextSteps({plan, results, host, rerun}) {
-  const cmd = (rest) => `wx-admin --pbx ${host} ${rest}`;
+  const cmd = (rest) => `wx-admin --pbx ${shellArg(host)} ${rest}`;
   const steps = [];
   const resultOf = new Map(results.map((r) => [r.key, r]));
   const done = (kind, actions = ['create', 'overwrite']) =>
     results.filter((r) => r.key.startsWith(`${kind}/`) && actions.includes(r.action)).map((r) => r.key);
 
-  // Trunks skipped for their password.
-  const noPassword = results.filter((r) => r.action === 'skip' && /^no password/.test(r.because ?? ''));
-  if (noPassword.length) {
-    const names = noPassword.map((r) => splitKey(r.key).name);
+  // What was not written, by what caused it: a password not given, an object that failed, a reference missing on
+  // the target. Each group is finished by the same import for these objects only, overwriting (an ACL group or
+  // dialplan made bare in the first pass is on the target, empty, until then).
+  const byKey = new Map(results.map((r) => [r.key, r]));
+  const rootOf = (r) => {
+    const seen = new Set();
+    let x = r;
+    while (x.action === 'skip' && byKey.has(x.because) && !seen.has(x.key)) {
+      seen.add(x.key);
+      x = byKey.get(x.because);
+    }
+    return x;
+  };
+  const left = results.filter((r) => r.action === 'skip' || r.action === 'failed');
+  const groupOf = (r) => {
+    const root = rootOf(r);
+    if (root.action === 'failed') return 'failed';
+    return /^no password/.test(root.because ?? '') ? 'password' : 'missing';
+  };
+  const finish = (list) => `${rerun} --only ${onlyArg(list.map((r) => r.key))} --overwrite`;
+  const empty = (list) => {
+    const keys = list.filter((r) => r.bare).map((r) => r.key);
+    return keys.length ? `; ${fold(keys)} ${keys.length === 1 ? 'is' : 'are'} on ${host} empty until then` : '';
+  };
+  const pw = left.filter((r) => groupOf(r) === 'password');
+  if (pw.length) {
+    const trunks = pw.filter((r) => /^no password/.test(r.because ?? '')).map((r) => splitKey(r.key).name);
+    const also = pw.filter((r) => !/^no password/.test(r.because ?? ''));
     steps.push({
-      what:
-        names.length === 1
-          ? `Set the password of the trunk ${names[0]} and write it again`
-          : `Set the password of ${names.length} trunks: ${fold(names)}`,
-      why: 'Passwords are never exported; none was given for these, so they were not written (nor what uses them).',
-      objects: noPassword.map((r) => objectOf(r.key)),
+      what: `${trunks.length === 1 ? `Set the password of the trunk ${trunks[0]}` : `Set the password of ${trunks.length} trunks: ${fold(trunks)}`}${also.length ? `, then write what uses ${trunks.length === 1 ? 'it' : 'them'}: ${fold(also.map((r) => r.key))}` : ''}${empty(pw)}`,
+      why: 'Passwords are never exported; none was given for these, so they were not written (nor what uses them). The command asks for them in a terminal; else add --secrets FILE.',
+      objects: pw.map((r) => objectOf(r.key)),
       wms: WMS.trunks,
-      command: `${rerun} (it asks for the passwords), or after making them: ${cmd(`trunk update ${names.length === 1 ? names[0] : '<trunk>'} --secret --yes`)}`,
+      command: finish(pw),
       blocking: true,
     });
   }
-
-  // Objects that failed, and what was skipped with them.
-  const failed = results.filter((r) => r.action === 'failed');
+  const failed = left.filter((r) => groupOf(r) === 'failed');
   if (failed.length) {
-    const skipped = results.filter(
-      (r) => r.action === 'skip' && failed.some((f) => f.key === r.because || r.because === f.key),
-    );
-    const chain = results.filter(
-      (r) => r.action === 'skip' && !/^no password/.test(r.because ?? '') && !skipped.includes(r),
-    );
-    const also = [...skipped, ...chain];
+    const roots = failed.filter((r) => r.action === 'failed');
+    const also = failed.filter((r) => r.action !== 'failed');
     steps.push({
-      what: `${failed.length} object${failed.length === 1 ? '' : 's'} failed: ${fold(failed.map((r) => r.key))}${also.length ? `; skipped with them: ${fold(also.map((r) => r.key))}` : ''}`,
-      why: failed.map((r) => `${r.key}: ${r.error}`).join('; '),
-      objects: [...failed, ...also].map((r) => objectOf(r.key)),
+      what: `${roots.length} object${roots.length === 1 ? '' : 's'} failed: ${fold(roots.map((r) => r.key))}${also.length ? `; skipped with them: ${fold(also.map((r) => r.key))}` : ''}${empty(failed)}`,
+      why: roots.map((r) => `${r.key}: ${r.error}`).join('; '),
+      objects: failed.map((r) => objectOf(r.key)),
       wms: '',
-      // Again for these only, overwriting: a group or dialplan made bare before it failed is there now.
-      command: `${rerun} --only ${[...failed, ...also].map((r) => r.key.replace('/', ':')).join(',')} --overwrite`,
+      command: finish(failed),
+      blocking: true,
+    });
+  }
+  const missing = left.filter((r) => groupOf(r) === 'missing');
+  if (missing.length) {
+    steps.push({
+      what: `${missing.length} object${missing.length === 1 ? ' was' : 's were'} skipped: ${fold(missing.map((r) => r.key))}${empty(missing)}`,
+      why: missing.map((r) => `${r.key}: needs ${rootOf(r).because}`).join('; '),
+      objects: missing.map((r) => objectOf(r.key)),
+      wms: '',
+      command: finish(missing),
       blocking: true,
     });
   }
@@ -114,7 +153,7 @@ export function nextSteps({plan, results, host, rerun}) {
         what: `Upload the sound ${w.value} used by ${users}`,
         why: `Sounds are not transferred and ${host} has no ${w.value}.`,
         wms: WMS.sounds,
-        command: cmd(`sound upload <file of ${w.value}>`),
+        command: cmd(`sound upload <file> --name ${shellArg(w.value)}`),
         blocking: true,
       },
       moh: {
@@ -142,7 +181,7 @@ export function nextSteps({plan, results, host, rerun}) {
         what: `Create the user ${w.value} or take it out of ${users}`,
         why: `${w.value} is a member there but not a user on ${host}.`,
         wms: WMS.queues,
-        command: cmd(`queue update ${objects[0].name} --member <ext>... --yes`),
+        command: cmd(`queue update ${shellArg(objects[0].name)} --member <ext>... --yes`),
         blocking: false,
       },
       external: {

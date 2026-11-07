@@ -170,3 +170,37 @@ test('a number and the same number as a string compare the same (the PBX answers
   const t = {queues: [{id: '9', name: 'q', data: {title: 'q', settings: {broadcastPriority: 0}}}]};
   assert.equal(makePlan(s, t, {...B}).items[0].state, 'same');
 });
+
+test('review 9: two objects of one name on the target block the object of the export', () => {
+  const s = toPortable({switches: [{id: '1', name: 'night', data: {title: 'night', state: 0}}]}, A);
+  const t = {
+    switches: [
+      {id: '7', name: 'night', data: {title: 'night', state: 0}},
+      {id: '8', name: 'night', data: {title: 'night', state: 1}},
+    ],
+  };
+  const it = makePlan(s, t, {...B}).items[0];
+  assert.equal(it.state, 'blocked');
+  assert.match(it.reason, /two objects named night on b\.wildixin\.com/);
+});
+
+test('review 3: the target ids carry the login of trunks', () => {
+  const t = {'trunks-sip': [{id: '3', name: 'carrier', data: {title: 'carrier', name: 'login1'}}]};
+  assert.deepEqual(makePlan({kinds: {}}, t, {...B}).target['trunks-sip/carrier'], {
+    id: '3',
+    name: 'carrier',
+    login: 'login1',
+  });
+});
+
+test('review 4: queue members are checked against the users of the target; not checked when they could not be read', () => {
+  const s = toPortable(
+    {queues: [{id: '5', name: 'q', data: {title: 'q', members: ['101@internalcalls'], settings: {}}}]},
+    A,
+  );
+  let p = makePlan(s, {queues: [], users: [{id: '9', name: '101', data: {extension: '101'}}]}, {...B});
+  assert.deepEqual(p.items[0].warnings, []);
+  p = makePlan(s, {queues: [], users: {error: 'Access error'}}, {...B});
+  assert.equal(p.items[0].warnings[0].type, 'not-checked');
+  assert.match(p.items[0].warnings[0].text, /101/);
+});

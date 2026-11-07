@@ -207,3 +207,21 @@ test('the picker gets the groups, bound objects disabled; its choice and their n
   );
   assert.deepEqual([...picked].sort(), ['dialplans/main', 'queues/support']);
 });
+
+test('review 2: --only takes \\, for a comma inside a name', () => {
+  assert.deepEqual(parseOnly('queues:x\\,y,dialplans:main'), [
+    {kind: 'queues', name: 'x,y'},
+    {kind: 'dialplans', name: 'main'},
+  ]);
+});
+
+test('review 8: without a readable serial the export refuses, before writing', async () => {
+  const s = STATE();
+  delete s['/PBX/settings/'];
+  const pbx = fakePbx(s);
+  const dir = path.join(tempConfigDir(), 'exp');
+  const r = await run(['config', 'export', '--to', dir, '--pbx', 'demo', '--all'], {env: env(), fetch: pbx.fetch});
+  assert.equal(r.code, 64);
+  assert.match(r.stderr, /serial/);
+  assert.ok(!fs.existsSync(dir));
+});

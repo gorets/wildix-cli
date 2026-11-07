@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createInterface} from 'node:readline/promises';
 import {UsageError} from 'wldx-core/errors';
+import {clean} from 'wldx-core/format';
 import {readSecret} from 'wldx-core/secret';
 import {select} from 'wldx-core/select';
 import {readSerial} from '../pbx.mjs';
@@ -64,6 +65,8 @@ export async function targetChecks(client) {
 // The kinds to read on the target: those of the export and those its references point at.
 function kindsToRead(portable) {
   const kinds = new Set(Object.keys(portable.kinds));
+  // queue members and users named by dialplans are checked against the target's users
+  if (Object.values(portable.soft ?? {}).some((keys) => keys.some((k) => k.startsWith('users/')))) kinds.add('users');
   for (const list of Object.values(portable.kinds))
     for (const o of list) for (const r of refsOf(o.data)) if (Object.hasOwn(TRANSFER_KINDS, r.kind)) kinds.add(r.kind);
   return Object.keys(TRANSFER_KINDS).filter((k) => kinds.has(k));
@@ -128,6 +131,14 @@ async function readSecretsFile(ctx, from) {
   }
 }
 
+// What ticking an object in the picker ticks with it: the new objects it needs. One that differs is on the target
+// already (the reference resolves to it); it is overwritten only when ticked itself.
+export function pickerRequires(plan) {
+  const state = new Map(plan.items.map((i) => [i.key, i.state]));
+  const needs = new Map(plan.items.map((i) => [i.key, i.needs]));
+  return (k) => (needs.get(k) ?? []).filter((n) => state.get(n) === 'new');
+}
+
 // The keys to write: the picker, --all or --only (with what they need that is new or differs).
 async function choose(ctx, plan, values) {
   const writable = (i) => i.state === 'new' || (i.state === 'differs' && values.overwrite);
@@ -171,7 +182,7 @@ async function choose(ctx, plan, values) {
   return select(ctx, {
     title: `What to write to ${plan.host} (new ones are ticked; ticking one that differs overwrites it)`,
     groups,
-    requires: (k) => (byKey.get(k)?.needs ?? []).filter((n) => ['new', 'differs'].includes(byKey.get(n)?.state)),
+    requires: pickerRequires(plan),
   });
 }
 
@@ -228,7 +239,11 @@ export async function runImport(ctx, {portable, from, client, values, rerun}) {
       secrets = {};
       for (const it of items) {
         for (const p of secretsOf(it.data)) {
-          const v = await readSecret(ctx, `${TRANSFER_KINDS[it.kind].label} ${it.name}, ${p} (empty: skip it): `);
+          const label = clean(`${TRANSFER_KINDS[it.kind].label} ${it.name}, ${p}`).replace(
+            /\x1b\[[0-9;]*m|[\r\n]/g,
+            ' ',
+          );
+          const v = await readSecret(ctx, `${label} (empty: skip it): `);
           if (v) (secrets[it.key] ??= {})[p] = v;
         }
       }

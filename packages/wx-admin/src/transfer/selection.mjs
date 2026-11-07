@@ -9,10 +9,22 @@ export const GROUPS = [
   {id: 'trunks', label: 'Trunks'},
 ];
 
-// --only "dialplans:main,queues:*" → [{kind, name}] ("*": every object of the kind; a name may hold "/" and ":").
+// Split at the commas that are not escaped; \, and \\ in a name stand for , and \.
+function splitList(spec) {
+  const out = [''];
+  for (let i = 0; i < spec.length; i += 1) {
+    const ch = spec[i];
+    if (ch === '\\' && (spec[i + 1] === ',' || spec[i + 1] === '\\')) out[out.length - 1] += spec[(i += 1)];
+    else if (ch === ',') out.push('');
+    else out[out.length - 1] += ch;
+  }
+  return out;
+}
+
+// --only "dialplans:main,queues:*" → [{kind, name}] ("*": every object of the kind; a name may hold "/" and ":",
+// and "," written \,).
 export function parseOnly(spec) {
-  return String(spec)
-    .split(',')
+  return splitList(String(spec))
     .map((s) => s.trim())
     .filter(Boolean)
     .map((s) => {

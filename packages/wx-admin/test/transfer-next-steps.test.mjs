@@ -28,7 +28,7 @@ test('a trunk skipped for its password: set it (blocking)', () => {
   );
   assert.equal(s.blocking, true);
   assert.match(s.what, /Set the password of the trunk a/);
-  assert.match(s.command, /wx-admin --pbx b\.wildixin\.com trunk update a --secret --yes/);
+  assert.equal(s.command, `${RERUN} --only trunks-sip:a --overwrite`);
   assert.match(s.wms, /Trunks/);
 });
 
@@ -132,4 +132,42 @@ test('no secret in any step', () => {
     [{key: 'trunks-sip/a', action: 'skip', because: 'no password: settingsPbx.secret'}],
   );
   assert.ok(!/\$secret/.test(JSON.stringify(list)));
+});
+
+test('review 1: objects left bare or skipped are finished by the same import, only them, with --overwrite', () => {
+  const list = steps(
+    [it('trunks-sip/carrier', 'new'), it('dialplans/main', 'new')],
+    [
+      {key: 'trunks-sip/carrier', action: 'skip', because: 'no password: settingsPbx.secret'},
+      {key: 'dialplans/main', action: 'skip', because: 'trunks-sip/carrier', bare: true},
+    ],
+  );
+  const s = find(list, /password/);
+  assert.equal(s.command, `${RERUN} --only trunks-sip:carrier,dialplans:main --overwrite`);
+  assert.match(s.what, /dialplans\/main is on b\.wildixin\.com empty/);
+});
+
+test('review 3: a skip that is neither a password nor a failure gets a step too', () => {
+  const s = find(
+    steps([it('trunk-groups/out', 'new')], [{key: 'trunk-groups/out', action: 'skip', because: 'trunks-sip/carrier'}]),
+    /skipped/,
+  );
+  assert.equal(s.blocking, true);
+  assert.match(s.why, /trunks-sip\/carrier/);
+});
+
+test('review 2: names and paths in commands are quoted for a shell; commas in names are escaped for --only', () => {
+  const list = nextSteps({
+    plan: {host: HOST, items: [it('queues/a b;$(x)', 'new'), it('queues/x,y', 'new')], welcomeMails: 0},
+    results: [
+      {key: 'queues/a b;$(x)', action: 'failed', error: 'e'},
+      {key: 'queues/x,y', action: 'failed', error: 'e'},
+    ],
+    host: HOST,
+    rerun: "wx-admin config import 'my dir' --pbx b.wildixin.com",
+  });
+  assert.equal(
+    find(list, /failed/).command,
+    "wx-admin config import 'my dir' --pbx b.wildixin.com --only 'queues:a b;$(x),queues:x\\,y' --overwrite",
+  );
 });

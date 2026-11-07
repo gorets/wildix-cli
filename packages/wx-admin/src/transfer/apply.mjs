@@ -14,7 +14,10 @@ export async function applyPlan(client, plan, chosen, {secrets = {}, selfDn, onE
   for (const [key, t] of Object.entries(plan.target)) table[key] = {...t};
   const results = [];
   const done = new Map(); // key → result of this run
+  const bare = new Set(); // made bare in pass 1, content not written yet
   const report = (r) => {
+    // An object made bare whose content was not written stays on the target empty: said so, to be finished.
+    if (bare.has(r.key) && (r.action === 'skip' || r.action === 'failed')) r.bare = true;
     results.push(r);
     done.set(r.key, r);
     onEvent(r);
@@ -47,9 +50,10 @@ export async function applyPlan(client, plan, chosen, {secrets = {}, selfDn, onE
 
   // Pass 1: the new ACL groups and dialplans, bare, so that everything can point at them.
   for (const it of items.filter((i) => i.state === 'new' && TWO_PASS.includes(i.kind))) {
-    const bare = it.kind === 'acl-groups' ? {name: it.name} : {name: it.name, description: it.data.description ?? ''};
+    const empty = it.kind === 'acl-groups' ? {name: it.name} : {name: it.name, description: it.data.description ?? ''};
     try {
-      remember(it, await TRANSFER_KINDS[it.kind].create(client, bare, it.name));
+      remember(it, await TRANSFER_KINDS[it.kind].create(client, empty, it.name));
+      bare.add(it.key);
     } catch (e) {
       report({key: it.key, action: 'failed', error: e.message});
     }
@@ -89,6 +93,8 @@ export async function applyPlan(client, plan, chosen, {secrets = {}, selfDn, onE
     try {
       if (it.state === 'differs' || (TWO_PASS.includes(it.kind) && existing)) {
         await kind.update(client, existing, data);
+        remember(it, existing);
+        bare.delete(it.key);
         report({key: it.key, action: it.state === 'differs' ? 'overwrite' : 'create', id: existing});
       } else {
         const id = await kind.create(client, data, it.name);

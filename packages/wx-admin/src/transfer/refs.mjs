@@ -96,6 +96,11 @@ export function toPortable(snapshot, {serial, host}) {
       // A value pointing at an object of `target`: a marker, or the value kept and noted.
       const ref = (value, target, path, order = [ID, 'dn', NAME, 'login'], how) => {
         if (literal(value)) return value;
+        // A soft reference (a user by extension) stays as it is: an extension means the same on any PBX.
+        if (how === 'soft') {
+          soft.add(keyOf(target, String(value)));
+          return value;
+        }
         if (OUTSIDE.has(target)) {
           out.outside.push({...at, path, kind: target, value: String(value), from: key});
           return value;
@@ -105,12 +110,8 @@ export function toPortable(snapshot, {serial, host}) {
         for (const as of order) {
           const name = t?.[as]?.get(as === 'dn' ? s.toLowerCase() : s);
           if (name === undefined) continue;
-          (how === 'soft' ? soft : needs).add(keyOf(target, name));
+          needs.add(keyOf(target, name));
           return {$ref: keyOf(target, name), as, ...(typeof value === 'number' ? {number: true} : {})};
-        }
-        if (how === 'soft') {
-          soft.add(keyOf(target, s));
-          return value;
         }
         out.unresolved.push({...at, path, value: s});
         return value;
@@ -147,11 +148,14 @@ export function toPortable(snapshot, {serial, host}) {
           ...r,
           group: ref(r.group, 'acl-groups', `rules[${i}].group`, ['dn']),
         }));
-        data.adminRules = (data.adminRules ?? []).map((r) => {
+        // An admin rule about this PBX is about the target; one about another PBX (or when the serial is not known)
+        // stays as it is and is reported: giving a group admin rights on the target it did not have is not a guess.
+        data.adminRules = (data.adminRules ?? []).map((r, i) => {
           const m = PBXID.exec(String(r.subject ?? ''));
-          return m && (!serial || m[1].toLowerCase() === String(serial).toLowerCase())
-            ? {...r, subject: {$self: 'pbx'}}
-            : r;
+          if (!m) return r;
+          if (serial && m[1].toLowerCase() === String(serial).toLowerCase()) return {...r, subject: {$self: 'pbx'}};
+          out.unresolved.push({...at, path: `adminRules[${i}].subject`, value: String(r.subject)});
+          return r;
         });
       }
       if (kind === 'users') {

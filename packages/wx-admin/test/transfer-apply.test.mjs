@@ -201,3 +201,34 @@ test('a second run writes nothing', async () => {
   assert.deepEqual(results, []);
   assert.equal(pbx.calls.filter((c) => c.method !== 'GET').length, writes);
 });
+
+test('review 3: a reference by login to a trunk already on the target resolves', async () => {
+  const s = EMPTY();
+  s['/Trunks/Sip/'] = [{id: '33', title: 'carrier', name: 'login1', settingsPbx: {secret: {}}}];
+  const pbx = fakePbx(s);
+  const client = await clientOf(pbx);
+  const portable = toPortable(
+    {
+      'trunks-sip': [{id: '3', name: 'carrier', data: {title: 'carrier', name: 'login1'}}],
+      'trunk-groups': [{id: '4', name: 'out', data: {name: 'out', rules: [{trunkName: 'login1'}]}}],
+    },
+    A,
+  );
+  portable.kinds = {'trunk-groups': portable.kinds['trunk-groups']};
+  const plan = makePlan(portable, await readKinds(client, ['trunks-sip', 'trunk-groups']), {...B});
+  const results = await applyPlan(client, plan, new Set(['trunk-groups/out']), {selfDn: SELF});
+  assert.deepEqual(
+    results.map((r) => [r.key, r.action]),
+    [['trunk-groups/out', 'create']],
+  );
+  assert.equal(pbx.state['/Trunks/Groups/'][0].rules[0].trunkName, 'login1');
+});
+
+test('review 1: a dialplan made bare in the first pass and then skipped is reported bare', async () => {
+  const pbx = fakePbx(EMPTY());
+  const {results} = await importInto(pbx, {secrets: {}});
+  const night = by(results, 'dialplans/night');
+  assert.equal(night.action, 'skip');
+  assert.equal(night.bare, true);
+  assert.ok(pbx.state['/PBX/Dialplans/'].some((d) => d.name === 'night'));
+});
