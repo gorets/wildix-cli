@@ -10,7 +10,8 @@ import path from 'node:path';
 const root = path.resolve(import.meta.dirname, '..');
 const dist = path.join(root, 'dist');
 const PACKAGES = ['core', 'wx', 'wx-admin'];
-const ALLOWED = /^package\/(package\.json|README\.md|LICENSE|CHANGELOG\.md|bin\/.+\.mjs|src\/.+\.mjs)$/;
+const ALLOWED =
+  /^package\/(package\.json|README\.md|LICENSE|CHANGELOG\.md|bin\/.+\.mjs|src\/.+\.mjs|specs\/[a-z-]+\.openapi\.json)$/;
 
 fs.rmSync(dist, {recursive: true, force: true});
 fs.mkdirSync(dist);

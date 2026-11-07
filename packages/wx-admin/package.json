@@ -25,7 +25,8 @@
   },
   "files": [
     "bin/",
-    "src/"
+    "src/",
+    "specs/"
   ],
   "engines": {
     "node": ">=22"
