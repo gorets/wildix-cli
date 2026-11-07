@@ -20,7 +20,7 @@
 - The source serial is never written to the folder, the log or the output.
 - Log file: `wx-admin-import-<host B>-<YYYY-MM-DDTHH-MM-SS>.log`, mode `0600`, flag `wx` (never over a file).
 - Secrets never in the folder, the log, the output, a next step or a command line.
-- Live checks only on the test PBX `v-gorobets-cloud`; writes only on objects named with the prefix `wx-transfer-test-`, deleted at the end of the task.
+- Live checks only on a test PBX; writes only on objects named with the prefix `wx-transfer-test-`, deleted at the end of the task.
 - Kind ids (used in files, `--only`, `$ref`): `acl-groups`, `users`, `trunks-sip`, `trunk-groups`, `price-lists`, `timetables`, `ivr`, `switches`, `paging`, `queues`, `dialplan-db`, `dialplans`, `dialplan-settings`.
 
 ## Review Focus
@@ -38,9 +38,9 @@
 **Files:**
 - Modify: `docs/specs/2026-11-07-config-transfer-design.md` (5.4)
 
-- [ ] **Step 1:** On the test PBX, create a user `wx-transfer-test-user` with a free extension, a license the PBX has, **no e-mail**, no password: `wx-admin --pbx v-gorobets-cloud user create --extension <free> --name wx-transfer-test-user --license <type>`.
+- [ ] **Step 1:** On the test PBX, create a user `wx-transfer-test-user` with a free extension, a license the PBX has, **no e-mail**, no password: `wx-admin --pbx <test PBX> user create --extension <free> --name wx-transfer-test-user --license <type>`.
 - [ ] **Step 2:** Record the answer: accepted or not; does `user get` show it; any password requirement in the error.
-- [ ] **Step 3:** Delete it: `wx-admin --pbx v-gorobets-cloud user delete wx-transfer-test-user --yes`; check it is gone.
+- [ ] **Step 3:** Delete it: `wx-admin --pbx <test PBX> user delete wx-transfer-test-user --yes`; check it is gone.
 - [ ] **Step 4:** Replace "to be confirmed live…" in spec 5.4 with what was seen. If the PBX requires a password, 5.4 says: the import generates a random one per user (crypto), never shows or logs it, and the next steps tell the admin to reset passwords.
 - [ ] **Step 5:** Commit `docs: users are created without a password (checked live)`.
 
@@ -149,7 +149,7 @@
 - Command: `wx-admin config export --to DIR [--all | --only SPEC] [--users]`, `readOnly` false, scopes per kind; picker when stdin and stderr are TTYs and neither `--all` nor `--only`; otherwise `UsageError('Without a terminal, choose with --all or --only')`. Text result: the folder and the counts per kind, warnings (bound, external, unresolved).
 - [ ] **Step 1:** Tests (fakePbx with the anonymised fixture of the test PBX: 4 dialplans, 5 queues, 5 ACL groups, 3 SIP trunks): `--all exports everything but users`; `--users adds users`; `--only dialplans:main brings what main needs`; `without a terminal and without --all/--only it refuses`; `the picker's choice is what is written` (inject `select` via `ctx.select` for the test).
 - [ ] **Step 2–4:** FAIL → implement → PASS.
-- [ ] **Step 5:** Live: `wx-admin --pbx v-gorobets-cloud config export --all --users --to <scratchpad>/exp`; check no file holds `221100001bab`; note counts. Commit `wx-admin config export: choose what to carry over, a folder without the source PBX in it`.
+- [ ] **Step 5:** Live: `wx-admin --pbx <test PBX> config export --all --users --to <scratchpad>/exp`; check no file holds the serial of the PBX; note counts. Commit `wx-admin config export: choose what to carry over, a folder without the source PBX in it`.
 
 ### Task 7: The plan against the target
 

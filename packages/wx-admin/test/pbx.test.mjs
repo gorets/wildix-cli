@@ -233,16 +233,16 @@ test('--pbx by serial: bare or as <serial>.wildixin.com, for saved access (recor
     }),
   });
   // pbx add reads the serial from the settings of the PBX
-  const fetch = fakeFetch(ok({records: []}), ok({pbxSerial: '221100001BAB'}));
+  const fetch = fakeFetch(ok({records: []}), ok({pbxSerial: '2211000000EF'}));
   const added = await add(env, ['one', '--token'], 'tok-1', fetch);
-  assert.equal(JSON.parse(added.stdout).serial, '221100001bab');
+  assert.equal(JSON.parse(added.stdout).serial, '2211000000ef');
   const urlOf = async (pbx) => {
     const f = fakeFetch(ok({records: []}));
     await run(['dialplan', 'list', '--pbx', pbx], {env, fetch: f, now: () => NOW});
     return f.calls[0]?.url;
   };
-  assert.equal(await urlOf('221100001bab'), 'https://one.wildixin.com/api/v1/PBX/Dialplans/');
-  assert.equal(await urlOf('221100001BAB.wildixin.com'), 'https://one.wildixin.com/api/v1/PBX/Dialplans/');
+  assert.equal(await urlOf('2211000000ef'), 'https://one.wildixin.com/api/v1/PBX/Dialplans/');
+  assert.equal(await urlOf('2211000000EF.wildixin.com'), 'https://one.wildixin.com/api/v1/PBX/Dialplans/');
   assert.equal(await urlOf('2211000000aa'), 'https://own.wildixin.com/api/v1/PBX/Dialplans/');
-  assert.deepEqual(complete(['--pbx', '2211'], env), ['221100001bab\tone.wildixin.com']);
+  assert.deepEqual(complete(['--pbx', '2211'], env), ['2211000000ef\tone.wildixin.com']);
 });

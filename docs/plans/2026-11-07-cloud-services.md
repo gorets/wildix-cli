@@ -21,7 +21,7 @@
 - Base URLs (spec 2.2): kb prod `https://kb.wim.wildix.com`, stage `https://kb.wim-stage.wildix.com`, **no stable**; voicebots `https://wim{,-stable,-stage}.wildix.com`; tools `https://tools.wim{,-stable,-stage}.wildix.com`; wilma `https://api{,-stable,-stage}.wilma.wildix.com`.
 - `--yes`: every delete, `kb source clean`, `kb update --source`, any non-GET of `wx-admin cloud`.
 - Answers masked with `maskSecrets` (`src/commands/trunk.mjs`) unless `--show-secrets`.
-- Live checks only on the stage of the test PBX `v-gorobets-cloud`; writes only on objects named `wx-test-…`, deleted at the end of the task.
+- Live checks only on the stage of a test PBX; writes only on objects named `wx-test-…`, deleted at the end of the task.
 
 ## Review Focus
 
