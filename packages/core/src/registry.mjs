@@ -46,4 +46,9 @@ export const globalsOf = (spec) => ({...(spec.globals ?? {}), ...GLOBAL_OPTIONS}
 const own = (o, k) => (o && Object.hasOwn(o, k) ? o[k] : undefined);
 export const groupOf = (name, spec) => own(spec.groups, name);
 export const commandOf = (group, name) => own(group?.commands, name);
+// A group may hold a group (`wx-admin kb source list`): an entry with commands and no run().
+export const isGroup = (c) => Boolean(c?.commands && typeof c.run !== 'function');
+// Every command of a group, those of its groups too.
+export const commandsOf = (group) =>
+  Object.values(group?.commands ?? {}).flatMap((c) => (isGroup(c) ? commandsOf(c) : [c]));
 export const singleOf = (name, spec) => own(spec.commands, name);

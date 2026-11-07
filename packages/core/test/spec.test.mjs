@@ -124,3 +124,39 @@ test('a global option whose context key would be a reserved name (env) is refuse
   assert.throws(() => createMain({groups: {}, commands: {}, globals: {env: {type: 'string'}}}), /env.*key/);
   assert.doesNotThrow(() => createMain({groups: {}, commands: {}, globals: {env: {type: 'string', key: 'cloudEnv'}}}));
 });
+
+test('a group may hold a group: three words name a command; help, errors and completion follow', async () => {
+  const list = {
+    summary: 'the sources',
+    usage: 'wx kb source list',
+    options: {all: {type: 'boolean', description: 'a'}},
+    args: [0, 0],
+    run: () => ({listed: true}),
+  };
+  const registry = {
+    groups: {
+      kb: {
+        summary: 'knowledge',
+        commands: {
+          get: {summary: 'one', usage: 'wx kb get', options: {}, args: [0, 0], run: () => ({got: true})},
+          source: {summary: 'data sources', commands: {list}},
+        },
+      },
+    },
+    commands: {},
+  };
+  assert.deepEqual(JSON.parse((await run(['kb', 'source', 'list'], {registry})).stdout), {listed: true});
+  assert.deepEqual(JSON.parse((await run(['kb', 'get'], {registry})).stdout), {got: true});
+  let r = await run(['kb', 'source'], {registry, output: 'text'});
+  assert.equal(r.code, 64);
+  assert.match(r.stderr, /wx kb source needs a command/);
+  assert.match(r.stderr, /wx kb source list/);
+  r = await run(['kb', 'source', 'nope'], {registry});
+  assert.match(r.stderr, /Unknown command: wx kb source nope/);
+  r = await run(['kb', '-h'], {registry, output: 'text'});
+  assert.match(r.stdout, /wx kb source list/);
+  const spec = {...SPEC, ...registry};
+  assert.deepEqual(complete(['kb', 's'], {}, spec), ['source\tdata sources']);
+  assert.deepEqual(complete(['kb', 'source', ''], {}, spec), ['list\tthe sources']);
+  assert.ok(complete(['kb', 'source', 'list', '--'], {}, spec).includes('--all\ta'));
+});

@@ -23,7 +23,16 @@ import {SHELLS, TOP_LEVEL, complete, completionScript, completionUsage} from './
 import {AuthError, UsageError} from './errors.mjs';
 import {clean, toText} from './format.mjs';
 import {program} from './program.mjs';
-import {COMMON_OPTIONS, GLOBAL_OPTIONS, commandOf, globalsOf, groupOf, singleOf} from './registry.mjs';
+import {
+  COMMON_OPTIONS,
+  GLOBAL_OPTIONS,
+  commandOf,
+  commandsOf,
+  globalsOf,
+  groupOf,
+  isGroup,
+  singleOf,
+} from './registry.mjs';
 
 const camel = (name) => name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
 
@@ -106,7 +115,7 @@ function groupUsage(name, g) {
   return [
     `Usage: ${program.name} ${name} <command> [options]`,
     '',
-    ...Object.values(g.commands).flatMap((cmd) => [`  ${cmd.usage}`, `      ${cmd.summary}`]),
+    ...commandsOf(g).flatMap((cmd) => [`  ${cmd.usage}`, `      ${cmd.summary}`]),
   ].join('\n');
 }
 
@@ -249,6 +258,16 @@ async function dispatch(all, io) {
   if (!sub) throw new UsageError(`${program.name} ${first} needs a command`, groupUsage(first, group));
   const cmd = commandOf(group, sub);
   if (!cmd) throw new UsageError(`Unknown command: ${program.name} ${first} ${sub}`, groupUsage(first, group));
+  if (isGroup(cmd)) {
+    const [third, ...more] = rest;
+    const name = `${first} ${sub}`;
+    if (third === '-h' || third === '--help') return line(io.stdout, groupUsage(name, cmd));
+    if (!third) throw new UsageError(`${program.name} ${name} needs a command`, groupUsage(name, cmd));
+    const inner = commandOf(cmd, third);
+    if (!inner || isGroup(inner))
+      throw new UsageError(`Unknown command: ${program.name} ${name} ${third}`, groupUsage(name, cmd));
+    return runCommand(inner, more, Boolean(inner.auth ?? cmd.auth ?? group.auth), io);
+  }
   return runCommand(cmd, rest, Boolean(cmd.auth ?? group.auth), io);
 }
 

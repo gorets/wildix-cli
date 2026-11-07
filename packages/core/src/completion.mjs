@@ -5,7 +5,7 @@
 // without a regenerated script. No network.
 import {sessions} from './auth.mjs';
 import {program} from './program.mjs';
-import {COMMON_OPTIONS, commandOf, globalsOf, groupOf, singleOf} from './registry.mjs';
+import {COMMON_OPTIONS, commandOf, globalsOf, groupOf, isGroup, singleOf} from './registry.mjs';
 
 export const SHELLS = ['bash', 'zsh', 'fish'];
 
@@ -77,6 +77,11 @@ export function complete(words, env, spec) {
     if (done.length === 1) return offer(Object.entries(group.commands).map(([name, c]) => [name, c.summary]));
     cmd = commandOf(group, done[1]);
     depth = 2;
+    if (isGroup(cmd)) {
+      if (done.length === 2) return offer(Object.entries(cmd.commands).map(([name, c]) => [name, c.summary]));
+      cmd = commandOf(cmd, done[2]);
+      depth = 3;
+    }
   }
   if (!cmd) return [];
   const options = {...cmd.options, ...COMMON_OPTIONS, ...globals};

@@ -2,6 +2,7 @@
 // Prints the command reference of the README from the definitions of the commands (usage and summary of each), so
 // the README follows the code. test/readme.test.mjs checks that every usage line is in the README.
 //   node tools/readme-commands.mjs > /tmp/commands.md   then paste it between the markers of README.md
+import {commandsOf} from 'wldx-core/registry';
 import {SPEC} from '../src/cli.mjs';
 
 const {groups: GROUPS, commands: COMMANDS} = SPEC;
@@ -17,7 +18,7 @@ for (const [name, g] of Object.entries(GROUPS)) {
     '| Command | What it does |',
     '| --- | --- |',
   );
-  for (const cmd of Object.values(g.commands)) out.push(`| \`${cell(cmd.usage)}\` | ${cell(cmd.summary)} |`);
+  for (const cmd of commandsOf(g)) out.push(`| \`${cell(cmd.usage)}\` | ${cell(cmd.summary)} |`);
   out.push('');
 }
 const {api, ...login} = COMMANDS;
