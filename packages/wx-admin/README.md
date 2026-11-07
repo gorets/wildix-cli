@@ -452,6 +452,7 @@ The PBX signed in to (wx-admin login): the list, the default one, a check.
 | `wx-admin cloud [<service> [<operation>]] [--param NAME=VALUE]... [--data JSON \| --data-file FILE\|-] [--yes] [--show-secrets]` | any operation of the cloud services (knowledge base, voicebots, WIM tools, Wilma) with the token of the PBX |
 | `wx-admin login [<host>] [--api-key \| --password [--no-basic] [--user NAME] [--code CODE] \| --basic [--user NAME] \| --token] [--port N] [--no-check]` | sign in to a PBX: a Company API Key, or a login and password (Basic, else the WMS sign-in with 2FA) |
 | `wx-admin logout [<host>]` | sign out of a PBX: end the WMS sign-in on the PBX and forget the access on this computer |
+| `wx-admin status [--check]` | the PBX signed in to: which one commands use, how, and until when; the version of wx-admin |
 | `wx-admin completion [bash\|zsh\|fish]` | the shell completion script (default: the shell of `$SHELL`) |
 <!-- commands:end -->
 
