@@ -80,10 +80,9 @@ export function makePlan(portable, target, {serial, host, licenses, sounds, moh,
     for (const it of items) {
       if (it.state === 'blocked') continue;
       for (const need of it.needs) {
-        const there = Object.hasOwn(ids, need);
         const mine = byKey.get(need);
-        if (there && (!mine || mine.state !== 'blocked')) continue;
-        if (mine && mine.state !== 'blocked') continue;
+        // on the target already, or in the export and writable
+        if (Object.hasOwn(ids, need) || (mine && mine.state !== 'blocked')) continue;
         const why = mine ? `${need} is blocked: ${mine.reason}` : `neither in the export nor on ${host}`;
         Object.assign(it, {state: 'blocked', reason: `needs ${need}: ${why}`});
         changed = true;
