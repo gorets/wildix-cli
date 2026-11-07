@@ -5,7 +5,7 @@ import {clientOf, fakePbx} from './fake-pbx.mjs';
 
 const state = () => ({
   '/PBX/AclGroups/': [
-    {id: '7', dn: 'gid=7,o=com0,dc=wildix', name: 'Sales', wcgrp: '1', inherits: null, rules: [], adminRules: []},
+    {id: '7', dn: 'gid=7,o=com0,dc=wildix', name: 'Sales', wcgrp: '5', inherits: null, rules: [], adminRules: []},
   ],
   '/PBX/Colleagues/': Array.from({length: 2500}, (_, i) => ({
     id: String(i + 1),
@@ -42,6 +42,7 @@ test('every kind reads its objects by name, without ids, dns and runtime fields'
     all['acl-groups'].map((o) => [o.id, o.name, o.data.dn, o.data.id]),
     [['7', 'Sales', undefined, undefined]],
   );
+  assert.equal(all['acl-groups'][0].data.wcgrp, undefined, 'wcgrp is unique per PBX: never carried');
   assert.equal(all['trunks-sip'][0].name, 'main');
   assert.equal(all['trunks-sip'][0].data.status, undefined);
   assert.equal(all['price-lists'][0].data.csv, 'dialprefix,destination,rate\n39,Italy,0.1\n');

@@ -190,6 +190,7 @@ export const TRANSFER_KINDS = {
     path: '/PBX/AclGroups/',
     scope: 'aclgroups',
     nameField: 'name',
+    strip: ['wcgrp'], // a number the PBX gives each group, unique on it (checked live): never carried
     postAnswers: 'object',
   }),
   users,

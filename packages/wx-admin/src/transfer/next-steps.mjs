@@ -63,7 +63,8 @@ export function nextSteps({plan, results, host, rerun}) {
       why: failed.map((r) => `${r.key}: ${r.error}`).join('; '),
       objects: [...failed, ...also].map((r) => objectOf(r.key)),
       wms: '',
-      command: rerun,
+      // Again for these only, overwriting: a group or dialplan made bare before it failed is there now.
+      command: `${rerun} --only ${[...failed, ...also].map((r) => r.key.replace('/', ':')).join(',')} --overwrite`,
       blocking: true,
     });
   }

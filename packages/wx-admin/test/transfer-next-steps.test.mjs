@@ -106,7 +106,7 @@ test('a failed object and what was skipped with it: the reason and the same impo
   assert.equal(s.blocking, true);
   assert.match(s.why, /Already present/);
   assert.match(s.what, /dialplans\/main/);
-  assert.equal(s.command, RERUN);
+  assert.equal(s.command, `${RERUN} --only queues:q,dialplans:main --overwrite`);
 });
 
 test('what is never transferred is always listed; ACL changes ask who administers the PBX', () => {

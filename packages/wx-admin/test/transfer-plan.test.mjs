@@ -164,3 +164,9 @@ test('counts and the target ids for writing', () => {
   assert.deepEqual(p.target['dialplans/users'], {id: '40', name: 'users'});
   assert.deepEqual(p.target['acl-groups/Default'], {id: '70', dn: gid(70), name: 'Default'});
 });
+
+test('a number and the same number as a string compare the same (the PBX answers either)', () => {
+  const s = toPortable({queues: [{id: '1', name: 'q', data: {title: 'q', settings: {broadcastPriority: '0'}}}]}, A);
+  const t = {queues: [{id: '9', name: 'q', data: {title: 'q', settings: {broadcastPriority: 0}}}]};
+  assert.equal(makePlan(s, t, {...B}).items[0].state, 'same');
+});

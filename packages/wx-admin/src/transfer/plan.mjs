@@ -4,7 +4,7 @@
 // a value outside the PBX). The target's own objects are made portable the same way, so both sides compare by name.
 import {keyOf, refsOf, splitKey, toPortable} from './refs.mjs';
 
-// JSON with sorted keys: two objects compare equal whatever the order of their fields.
+// JSON with sorted keys and numbers as strings: two objects compare equal whatever the order of their fields.
 const stable = (v) =>
   v && typeof v === 'object'
     ? Array.isArray(v)
@@ -13,7 +13,7 @@ const stable = (v) =>
           .sort()
           .map((k) => `${JSON.stringify(k)}:${stable(v[k])}`)
           .join(',')}}`
-    : JSON.stringify(v);
+    : JSON.stringify(typeof v === 'number' ? String(v) : v); // the PBX answers 0 or "0" for the same value
 
 const OUTSIDE_NAMES = {sounds: 'sound', moh: 'music on hold', phonebooks: 'phonebook'};
 
