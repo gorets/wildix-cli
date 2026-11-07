@@ -1,0 +1,37 @@
+{
+  "name": "wldx-cli",
+  "version": "1.1.0",
+  "description": "Unofficial command line for Wildix (x-bees chats and more), acting as the logged-in user",
+  "keywords": [
+    "wildix",
+    "x-bees",
+    "cli",
+    "chat"
+  ],
+  "license": "MIT",
+  "author": "Vladimir Gorobets",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gorets/wildix-cli.git",
+    "directory": "packages/wx"
+  },
+  "homepage": "https://github.com/gorets/wildix-cli/tree/main/packages/wx#readme",
+  "bugs": "https://github.com/gorets/wildix-cli/issues",
+  "type": "module",
+  "bin": {
+    "wx": "bin/wx.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "wldx-core": "workspace:*"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}

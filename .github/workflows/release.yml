@@ -1,0 +1,44 @@
+name: release
+
+# On a vX.Y.Z tag: stages wldx-core, wldx-cli and wldx-admin-cli on npm through npm trusted publishing (OIDC): no npm
+# token is stored here. The trusted publisher of each package (this repository, this workflow, permission "npm stage
+# publish") is configured on npmjs.com in its settings. The tarballs come from tools/pack.mjs (pnpm writes the exact
+# version of wldx-core in place of "workspace:*"). A version already on npm is skipped. A staged version is not
+# public until a maintainer approves it with 2FA, the core first:
+#   npm stage list wldx-core && npm stage approve <stage-id>     (then wldx-cli, wldx-admin-cli)
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: The tag matches every package
+        run: |
+          for dir in core wx wx-admin; do
+            test "v$(node -p "require('./packages/$dir/package.json').version")" = "$GITHUB_REF_NAME" || { echo "packages/$dir is not $GITHUB_REF_NAME"; exit 1; }
+          done
+      - run: pnpm run check
+      - name: Stage the packages, the core first
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for name in wldx-core wldx-cli wldx-admin-cli; do
+            if [ -n "$(npm view "$name@$version" version 2>/dev/null)" ]; then
+              echo "$name@$version is already on npm: skipped"
+              continue
+            fi
+            npm stage publish "./dist/$name-$version.tgz" --provenance --access public
+          done

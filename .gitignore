@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.tgz
+.env
+.DS_Store
+.idea
+.vscode
+
+# Drafts of announcements (not published)
+announce/
+
+# Copied into each package by tools/pack.mjs
+packages/*/LICENSE

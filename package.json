@@ -1,0 +1,21 @@
+{
+  "name": "wildix-cli",
+  "private": true,
+  "description": "wx and wx-admin, the unofficial Wildix command lines, and their shared core",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "lint": "biome ci --error-on-warnings .",
+    "format": "biome format --write .",
+    "test": "pnpm -r test",
+    "pack": "node tools/pack.mjs",
+    "check": "pnpm lint && pnpm test && pnpm run pack"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.6"
+  }
+}

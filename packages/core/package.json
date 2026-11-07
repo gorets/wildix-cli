@@ -1,0 +1,31 @@
+{
+  "name": "wldx-core",
+  "version": "1.1.0",
+  "description": "The shared core of wx (wldx-cli) and wx-admin (wldx-admin-cli): router, output, completion, Wildix login, file checks",
+  "keywords": [
+    "wildix",
+    "cli"
+  ],
+  "license": "MIT",
+  "author": "Vladimir Gorobets",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gorets/wildix-cli.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/gorets/wildix-cli/tree/main/packages/core#readme",
+  "bugs": "https://github.com/gorets/wildix-cli/issues",
+  "type": "module",
+  "exports": {
+    "./*": "./src/*.mjs"
+  },
+  "files": [
+    "src/"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  }
+}
