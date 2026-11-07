@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.1 — 2026-11-07
 
 - A check for a newer version on npm, once a day in the background (`$WILDIX_CONFIG_DIR/update-check.json`): one
   line on stderr after the command when there is one; never in CI, under `npx`, without a terminal, with `--output

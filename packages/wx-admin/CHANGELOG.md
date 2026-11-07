@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.1 — 2026-11-07
 
 - `wx-admin` says when a newer version is on npm (once a day, one line after the command; `WX_NO_UPDATE_CHECK=1`
   turns it off).

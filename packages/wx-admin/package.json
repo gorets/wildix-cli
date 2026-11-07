@@ -1,6 +1,6 @@
 {
   "name": "wldx-admin-cli",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Unofficial admin command line for the Wildix PBX (dialplans and the PBX REST API), with an x-bees login or a Company API Key",
   "keywords": [
     "wildix",
