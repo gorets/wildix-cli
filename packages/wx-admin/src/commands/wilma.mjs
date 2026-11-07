@@ -20,6 +20,8 @@ import {
   listOf,
   masked,
   SHOW_SECRETS,
+  uriOf,
+  usedBy,
   wholeNumber,
   wilmaClient,
 } from '../wilma/api.mjs';
@@ -331,12 +333,16 @@ const authText = (auth, names = new Map()) => {
   return 'no authorization';
 };
 
-// The agents whose draft lists a connector as a capability (the references of the audit do not track connectors).
+// Who uses a connector: the references of the audit, and the agents whose draft lists it as a capability (seen
+// missing from the references).
 async function agentsUsingConnector(client, c) {
   const agents = await listOf(client, KINDS.agents);
-  return agents
-    .filter((a) => (a.engine?.ai?.capabilities ?? []).some((cap) => cap.connector?.id === c.id))
-    .map((a) => ({label: a.name, uri: `wilma://agents/${a.id}`}));
+  const users = await usedBy(client, uriOf(KINDS.connectors, c.id));
+  for (const a of agents)
+    if ((a.engine?.ai?.capabilities ?? []).some((cap) => cap.connector?.id === c.id))
+      if (!users.some((u) => u.uri === `wilma://agents/${a.id}`))
+        users.push({label: a.name, uri: `wilma://agents/${a.id}`});
+  return users;
 }
 
 const connectionNames = async (client) =>
@@ -473,7 +479,7 @@ const secretCommands = {
     async run(ctx) {
       const client = await wilmaClient(ctx);
       const s = await findObject(client, KINDS.secrets, ctx.positionals[0]);
-      return masked(ctx, {...(await getObject(client, KINDS.secrets, s.id)), uri: `wilma://secrets/${s.id}`});
+      return masked(ctx, await getObject(client, KINDS.secrets, s.id));
     },
     text: (s) =>
       table([
@@ -487,7 +493,6 @@ const secretCommands = {
             .join(', ') || 'none',
         ],
         ['Updated', localTime(s.updatedAt ?? s.createdAt)],
-        ['URI', s.uri],
       ]),
   },
   create: {
@@ -899,16 +904,19 @@ const usage = {
     }
     return {rows, total};
   },
-  text: (r) => [
-    ...r.rows.map((row) => {
-      const dims = Object.entries(row.dimensions ?? {})
-        .map(([k, val]) => `${k}=${val}`)
-        .join(' ');
-      const when = row.start ?? row.time ?? row.bucket;
-      return `${[when ? localTime(when) : '', dims || 'all'].filter(Boolean).join(' ')}: ${metricsText(row.metrics)}`;
-    }),
-    ...(r.total && Object.keys(r.total).length ? [`total: ${metricsText(r.total.metrics ?? r.total)}`] : []),
-  ],
+  text: (r) =>
+    r.rows.length
+      ? [
+          ...r.rows.map((row) => {
+            const dims = Object.entries(row.dimensions ?? {})
+              .map(([k, val]) => `${k}=${val}`)
+              .join(' ');
+            const when = row.start ?? row.time ?? row.bucket;
+            return `${[when ? localTime(when) : '', dims || 'all'].filter(Boolean).join(' ')}: ${metricsText(row.metrics)}`;
+          }),
+          ...(r.total && Object.keys(r.total).length ? [`total: ${metricsText(r.total.metrics ?? r.total)}`] : []),
+        ]
+      : 'No usage in this window',
 };
 
 export const groups = {

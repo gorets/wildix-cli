@@ -424,3 +424,20 @@ test('audit, trace and usage map the options to the query', async () => {
   assert.match(uq.url, /groupBy=channel&groupBy=agent.id/);
   assert.equal(uq.query.interval, 'day');
 });
+
+test('a connector has the URI of the audit, and its references block a delete too', async () => {
+  const s = base();
+  s.references = {'wilma://tools/connectors/cn0000000001': [{label: 'Wilma', uri: 'wilma://agents/wilma-system'}]};
+  const {wx} = setup(s);
+  const g = await wx(['wilma', 'connector', 'get', 'HubSpot'], {output: 'text'});
+  assert.match(g.stdout, /URI +wilma:\/\/tools\/connectors\/cn0000000001$/m);
+  const r = await wx(['wilma', 'connector', 'delete', 'HubSpot', '--yes']);
+  assert.equal(r.code, 64);
+  assert.match(r.stderr, /used by Wilma/);
+});
+
+test('usage without rows says so', async () => {
+  const {wx} = setup();
+  const u = await wx(['wilma', 'usage'], {output: 'text'});
+  assert.equal(u.stdout.trim(), 'No usage in this window');
+});

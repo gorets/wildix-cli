@@ -21,6 +21,7 @@ export const KINDS = {
     base: '/v2/agents/agents',
     item: (id) => apiPath`/v2/agents/agents/${id}`,
     listKey: 'agents',
+    uri: 'agents',
     itemKey: 'agent',
     createFields: ['name', 'description', 'category', 'picture', 'channels', 'engine', 'settings', 'access'],
     versioned: true,
@@ -30,6 +31,7 @@ export const KINDS = {
     base: '/v2/skills',
     item: (id) => apiPath`/v2/skills/items/${id}`,
     listKey: 'skills',
+    uri: 'skills',
     itemKey: 'skill',
     createFields: ['name', 'description', 'content', 'tools', 'files', 'access'],
     versioned: true,
@@ -39,6 +41,7 @@ export const KINDS = {
     base: '/v2/tools',
     item: (id) => apiPath`/v2/tools/items/${id}`,
     listKey: 'tools',
+    uri: 'tools',
     itemKey: 'tool',
     createFields: ['name', 'category', 'description', 'input', 'handler'],
     versioned: true,
@@ -48,6 +51,7 @@ export const KINDS = {
     base: '/v2/tools/connectors',
     item: (id) => apiPath`/v2/tools/connectors/items/${id}`,
     listKey: 'connectors',
+    uri: 'tools/connectors',
     itemKey: 'connector',
     createFields: ['definition', 'configuration', 'authorization', 'name', 'description', 'grant'],
   },
@@ -63,6 +67,7 @@ export const KINDS = {
     base: '/v2/secrets/connections',
     item: (id) => apiPath`/v2/secrets/connections/${id}`,
     listKey: 'connections',
+    uri: 'secrets/connections',
     itemKey: 'connection',
   },
 };
@@ -106,7 +111,9 @@ export async function getVersion(client, kind, id, version) {
   return (await client.call('GET', `${kind.item(id)}${apiPath`/versions/${version}`}`))?.version;
 }
 
-export const uriOf = (kind, id) => `wilma://${kind.key}/${id}`;
+// The URI of an object in the audit log and its references (wilma://tools/connectors/<id> for a connector); a secret
+// has none we know of.
+export const uriOf = (kind, id) => `wilma://${kind.uri}/${id}`;
 
 // Who uses an object (agents that use a skill or a tool, their draft too): one entry per user, the draft folded in.
 export async function usedBy(client, uri) {

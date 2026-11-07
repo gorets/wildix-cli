@@ -129,10 +129,9 @@ export function versionedCommands(kind, spec) {
         versioned && o.publishedAt && o.definition
           ? [
               versionLine(o),
-              ...table(rows(spec.details({...o.definition, id: o[`${noun}Id`]}, o), true)),
-              `URI          ${o.uri}`,
+              ...table([...rows(spec.details({...o.definition, id: o[`${noun}Id`]}, o), true), ['URI', o.uri]]),
             ]
-          : [...table(rows(spec.details(o, o))), `URI          ${o.uri}`],
+          : table([...rows(spec.details(o, o)), ['URI', o.uri]]),
     },
     export: {
       summary: `write the definition of ${a} to a new JSON file, for create or update (masked unless --show-secrets)`,

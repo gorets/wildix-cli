@@ -159,6 +159,11 @@ is connected in the WIM console with OAuth) and documents. Everything else goes 
 hold secrets (e.g. the API token of a Confluence data source): they are masked unless `--show-secrets`, and the
 Confluence token is typed hidden, never given as an option.
 
+`wx-admin wilma` manages Wilma, the agent platform: agents (draft, published versions, which versions serve new
+sessions, API keys), the skills, tools and connectors they use, secrets (never their values), connections, and
+reads the audit log, traces and usage. An object is given by id or exact name; `export` and `create --from` move a
+definition, also to the company of another PBX (ids of secrets, connections and knowledge bases differ there).
+
 ## Commands
 
 Every command has `-h`, takes `--pbx HOST`, and prints text or, with `--output json`, JSON.
