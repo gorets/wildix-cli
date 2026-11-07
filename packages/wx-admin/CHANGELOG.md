@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.4.0 — unreleased
+
+- Added: `wx-admin login [<host>]` signs in to the PBX itself, with a menu that puts first a **Company API Key**
+  (recommended, and why) and then the **WMS login and password** of an administrator. With a login and password,
+  `wx-admin` uses **Basic** when the PBX takes it (`ALLOW_BASIC_AUTH=true`), else the **WMS sign-in for tools**
+  (`/api/v1/auth/login/`, WMS builds from November 2026) with the 2FA code of an authenticator app, e-mail or SMS,
+  renewed by its refresh token. The password is saved (0600) so that it moves to Basic when an administrator turns
+  it on and signs in again by itself when the PBX forgets an idle session (36 hours, or a restart): then only a 2FA
+  code is asked. Flags for scripts and agents: `--api-key`, `--password [--user] [--code] [--no-basic]`, `--basic`,
+  `--token`. One attempt of each kind per command (the PBX may lock an account after failed attempts).
+- Added: `wx-admin logout [<host>]` ends a WMS sign-in on the PBX and forgets the access; `wx-admin status [--check]`
+  shows the PBX signed in to, the default one, the access and until when.
+- Changed: the PBX of a command is `--pbx`, else the default PBX (the first one signed in to, or `pbx use`), else the
+  only one signed in to. A 403 from the PBX exits 2 (the access was refused), as the help says. `acl list` and
+  `acl get` (were `acl groups` and `acl group`).
+- **Removed:** the x-bees login from `wx-admin` (`login <e-mail>`, its `logout`, `profile`, `--profile`, the PBX of
+  the x-bees login): customer administrators have no x-bees account. `wx` keeps it. Removed `pbx add` and
+  `pbx remove` (`login` and `logout`) and `pbx use --login`. Access saved by 1.3.0 with Basic is not read: sign in
+  again.
+
 ## 1.3.0 — 2026-11-07
 
 - Cloud services with the CPA token of the PBX (Cognito PBX Auth: the cloud identity the PBX gives its

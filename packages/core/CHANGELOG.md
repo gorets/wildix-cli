@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0 — unreleased
+
+- A command line without the x-bees login: `profiles: false` in the spec drops `--profile`, its help line and
+  completion, and the token of the context (`wx-admin`).
+- `choose()` in `wldx-core/select`: a single-choice menu (arrows, digits, Enter; disabled items with a reason; notes
+  of several lines). `askLine()` in `wldx-core/secret`: an answer typed in a terminal, echoed, with a default; never
+  read from piped stdin, which may carry a secret.
+- "Unknown command" names the program once (`wx-admin: Unknown command: acl nope`).
+
 ## 1.3.0 — 2026-11-07
 
 - Fixed: the short wait for npm at the end of a command holds the process by itself (Node 22 could end the run

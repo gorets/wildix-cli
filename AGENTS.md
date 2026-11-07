@@ -6,8 +6,8 @@ lines and their shared core, as a pnpm workspace.
 | Package | npm | Command | What it is |
 | --- | --- | --- | --- |
 | `packages/wx` | `wldx-cli` | `wx` | the user command line: acts as the **logged-in user** (x-bees login), never as a bot |
-| `packages/wx-admin` | `wldx-admin-cli` | `wx-admin` | the admin command line: the PBX REST API, with saved access or the x-bees login |
-| `packages/core` | `wldx-core` | — | what both share: router, output, completion, login and profiles, file checks, HTTP |
+| `packages/wx-admin` | `wldx-admin-cli` | `wx-admin` | the admin command line: the PBX REST API, signed in to the PBX itself (no x-bees login) |
+| `packages/core` | `wldx-core` | — | what both share: router, output, completion, prompts and pickers, the x-bees login and profiles (for `wx`), file checks, HTTP |
 
 Each command line has its own `AGENTS.md` for what is particular to it. The agent skills (`gorets/wildix-skills`)
 share the login with both and will move to calling `wx` instead of their own scripts.
@@ -20,9 +20,9 @@ packages/core/src/registry.mjs    what a spec is (groups — a group may hold gr
                                   around); the common options
 packages/core/src/cli.mjs         createMain(spec): the router, global options anywhere, exit codes, the context
 packages/core/src/completion.mjs  shell completion: candidates from the spec, scripts for bash, zsh, fish
-packages/core/src/commands/       login, logout, status, profile: the same in both command lines
-packages/core/src/select.mjs      a checkbox tree for the terminal (createModel, select)
-packages/core/src/secret.mjs      hidden input of a secret, else the first line of stdin
+packages/core/src/commands/       login, logout, status, profile of the x-bees login (wx; wx-admin has its own)
+packages/core/src/select.mjs      a checkbox tree for the terminal (createModel, select) and a single-choice menu (choose)
+packages/core/src/secret.mjs      hidden input of a secret, else the first line of stdin; askLine: an echoed answer, terminal only
 packages/core/src/auth.mjs        login (code by e-mail), sessions in ~/.wildix/tokens, renewal; the wildix-auth format
 packages/core/src/files.mjs       what may be read to be sent (no secrets) and where files may be written
 packages/core/src/format.mjs      text output: toText, table, localTime, duration, oneLine, paint, clean
@@ -50,6 +50,7 @@ export const SPEC = {
   help: {options: ['  --pbx PBX  ...'], exitCodes: 'Exit codes: ...'},                        // lines of the main help
   completers: {pbxs: (env) => [[value, description], ...]},                                   // offline, fast
   around: (cmd, ctx, io, run) => run(),               // optional: e.g. --all-pbx runs the command once per PBX
+  profiles: false,                                    // optional: no x-bees login (no --profile, no token in ctx)
 };
 ```
 

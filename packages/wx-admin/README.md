@@ -4,14 +4,16 @@
 
 `wx-admin` manages a Wildix PBX through its REST API (`https://<pbx>/api/v1`): the system and its settings, users,
 ACL, queues, dialplans and the objects they use (timetables, IVR, switches, paging, the dialplan database), trunks,
-devices, phonebooks, sounds, call history, recordings and voicemails; any other operation through `wx-admin api`. It works with several PBX at once, and also manages the cloud services of the PBX's company (the knowledge base, voicebots, WIM tools, Wilma) with the cloud token the PBX gives its administrator. Its twin for the everyday user is
-[`wx`](https://github.com/gorets/wildix-cli/tree/main/packages/wx) (npm `wldx-cli`); they share the x-bees login.
+devices, phonebooks, sounds, call history, recordings and voicemails; any other operation through `wx-admin api`. It works with several PBX at once, and also manages the cloud services of the PBX's company (the knowledge base, voicebots, WIM tools, Wilma) with the cloud token the PBX gives its administrator. It signs in to the PBX itself, with a Company API Key or the WMS login and password of an administrator: no x-bees
+account is needed. Its twin for the everyday user is
+[`wx`](https://github.com/gorets/wildix-cli/tree/main/packages/wx) (npm `wldx-cli`), which uses the x-bees login.
 
 ```sh
 npm i -g wldx-admin-cli                       # the command is wx-admin
-wx-admin pbx add mypbx --api-key              # a Company API Key, typed hidden (or piped)
-wx-admin dialplan list --pbx mypbx
-wx-admin dialplan rules users --pbx mypbx
+wx-admin login mypbx                          # a menu: a Company API Key, or the WMS login and password
+wx-admin status                               # where commands go, with what access, until when
+wx-admin dialplan list
+wx-admin dialplan rules users
 
 npx wldx-admin-cli --help                     # without installing
 ```
@@ -22,37 +24,60 @@ same repository and of the same version.
 Unofficial: not made or supported by Wildix. It uses the PBX API as documented on the PBX
 (`https://<pbx>/api/v1/doc/`), which may change between WMS versions.
 
-## Access to a PBX
+## Signing in to a PBX
 
-Every request runs with the rights of the access that makes it:
+`wx-admin login mypbx` asks how, in this order of preference, and says why:
 
-| Access | How | Rights | Notes |
-| --- | --- | --- | --- |
-| **Company API Key** (`wsk-v1-…`) | `wx-admin pbx add <host> --api-key` | the scopes of the key, per group: `colleagues`, `aclgroups`, `callgroups`, `dialplan`, `trunks`, `devices`, `phonebooks`, `sounds`, `callhistory`, `recordings`, `smtp`, `security`, `info`, `pbxpower` (`:read` for reads, `:*` for changes), or `pbx:read` / `pbx:*` for all | Recommended by Wildix for automation (WMS 7.09+). A root admin makes it in WMS: **PBX → Integrations → Company API Keys**; it is shown once and expires (1 hour to 1 year). It acts as `admin`, or as the PBX user it is bound to. |
-| **x-bees login** | `wx-admin login <e-mail>` (or `wx login`) | the ACL of that user: dialplans need the Admin role | Only the user's own PBX, named in the login. Shared with `wx` and the `wildix-auth` agent skill. |
-| Simple Token | `wx-admin pbx add <host> --token` | the ACL of its application | Deprecated by Wildix: no new ones can be made. |
-| User and password | `wx-admin pbx add <host> --basic [--user admin]` | that user's ACL | The PBX accepts it only with `ALLOW_BASIC_AUTH=true` in `/rw2/etc/env.custom.ini`. |
+1. **A Company API Key** (`wsk-v1-…`, recommended). A root admin makes it once in WMS: **PBX → Integrations →
+   Company API Keys**; it is shown once and lasts 1 hour to 1 year (WMS 7.09+). Its scopes limit what it may do:
+   per group `colleagues`, `aclgroups`, `callgroups`, `dialplan`, `trunks`, `devices`, `phonebooks`, `sounds`,
+   `callhistory`, `recordings`, `smtp`, `security`, `info`, `pbxpower` (`:read` for reads, `:*` for changes), or
+   `pbx:read` / `pbx:*` for all (`config import` needs `pbx:*`). It acts as `admin`, or as the PBX user it is bound
+   to. It needs no password or 2FA code on this computer and is revoked in WMS without touching anyone's password:
+   the right choice for scripts and agents too.
+2. **The WMS login and password** of an administrator. `wx-admin` finds the way itself:
+   - **Basic**, when the PBX takes it (`ALLOW_BASIC_AUTH=true` in `/rw2/etc/env.custom.ini`): no expiry, and no 2FA
+     either: Basic bypasses it;
+   - else **the WMS sign-in for tools** (the API's `/auth/login/`, in WMS builds from November 2026 on), with the
+     2FA code of your authenticator app, e-mail or SMS. It lasts while it is used at least every 36 hours and the
+     PBX does not restart (15 days at most, 7 for `admin`): a PBX forgets an idle session after 36 hours.
 
-The secret is typed hidden, or read from stdin (`... | wx-admin pbx add <host> --api-key`), never taken from the
-command line. `pbx add` checks it with one read of the PBX before it keeps it. For CI, `WILDIX_PBX_API_KEY` with `WILDIX_PBX_HOST` gives a
-Company API Key for that one PBX without saving anything: the key is never sent to another `--pbx`, and `--all-pbx` is
-refused while it is set.
+   The password is saved (0600), so that `wx-admin` moves to Basic when an administrator turns it on, and signs in
+   again by itself when the PBX forgets the session: then only a 2FA code is asked, in a terminal. `--no-basic`
+   takes the WMS sign-in only and saves no password (you sign in again when it ends).
+
+| Flag | Access | Rights |
+| --- | --- | --- |
+| `--api-key` | a Company API Key | the scopes of the key |
+| `--password [--user NAME] [--code CODE] [--no-basic]` | a login and password: Basic, else the WMS sign-in | that user's ACL: the Admin role and the ACL of the menus |
+| `--basic [--user NAME]` | Basic only | that user's ACL |
+| `--token` | a Simple Token (deprecated by Wildix: no new ones can be made) | the ACL of its application |
+
+Without a flag a terminal shows the menu; a script or an agent gives a flag. Secrets are typed hidden or read from the
+first line of stdin (`... | wx-admin login mypbx --api-key`), never taken from the command line; a 2FA code may be
+given with `--code`. The new access is checked with one read of the PBX before it is kept, and an access saved before
+stays when the PBX refuses the new one. Each way is tried once per command: failed attempts may count towards the
+PBX's lockout. `wx-admin logout mypbx` ends a WMS sign-in on the PBX and forgets the access.
+
+For CI, `WILDIX_PBX_API_KEY` with `WILDIX_PBX_HOST` gives a Company API Key for that one PBX without saving anything:
+the key is never sent to another `--pbx`, and `--all-pbx` is refused while it is set.
 
 ### Several PBX
 
 Which PBX a command works on:
 
 1. `--pbx PBX` (anywhere on the command line): `name.wildixin.com`, a bare `name` (= `name.wildixin.com`), an IP
-   address, or the serial of a known PBX, bare or as `<serial>.wildixin.com` (`pbx add` and `pbx check` record the
-   serial; the PBX of the x-bees login has it in the login),
-2. else the default PBX (`wx-admin pbx use HOST`; `wx-admin pbx use --login` goes back to the next rule),
-3. else the PBX of the x-bees login.
+   address, or the serial of a PBX signed in to, bare or as `<serial>.wildixin.com` (`login` and `pbx check` record
+   the serial),
+2. else the default PBX: the first one you signed in to, or the one of `wx-admin pbx use HOST`,
+3. else the only PBX signed in to.
 
-`wx-admin pbx list` shows them (`*` is the default), `wx-admin pbx check` says which one a command would use and
-whether it accepts the access. Saved access lives in `~/.wildix/admin/pbx/<host>.json` (folder 0700, files 0600).
+`wx-admin status` and `wx-admin pbx list` show them (`*` is the default), `wx-admin pbx check` says which one a command
+would use and whether it accepts the access. Access lives in `~/.wildix/admin/pbx/<host>.json` (folder 0700, files
+0600): with a login and password, the password is in it.
 
-`--all-pbx` runs a command that only reads on every PBX (saved access, then the x-bees login's) and prints each
-result under its PBX: `wx-admin --all-pbx system info`, `wx-admin --all-pbx user registrations`.
+`--all-pbx` runs a command that only reads on every PBX signed in to and prints each result under its PBX:
+`wx-admin --all-pbx system info`, `wx-admin --all-pbx user registrations`.
 
 ## Dialplans
 
@@ -112,7 +137,7 @@ wx-admin config copy --from old --to new               # the same without the fo
 An administrator of a PBX also manages the cloud services of the PBX's company: the knowledge base (WIM),
 voicebots, WIM tools and Wilma. The PBX gives its administrator its own cloud token, the CPA token (Cognito PBX
 Auth: the PBX itself as a user of its company, valid 12 hours), and those services accept it. `wx-admin` takes it from
-the PBX chosen as for every command (`--pbx`, the default PBX, the PBX of the x-bees login), keeps it in memory only
+the PBX chosen as for every command (`--pbx`, the default PBX, the only one), keeps it in memory only
 and sends it only to the service called. A PBX user without the Admin role is refused; whether a Company API Key may
 take it is not checked yet.
 
@@ -136,7 +161,7 @@ Confluence token is typed hidden, never given as an option.
 
 ## Commands
 
-Every command has `-h`, takes `--pbx HOST` and `--profile EMAIL`, and prints text or, with `--output json`, JSON.
+Every command has `-h`, takes `--pbx HOST`, and prints text or, with `--output json`, JSON.
 
 <!-- commands:start (generated by tools/readme-commands.mjs) -->
 ### wx-admin system

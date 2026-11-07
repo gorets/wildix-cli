@@ -13,9 +13,10 @@ npm i -g wldx-admin-cli    # wx-admin
 npx wldx-cli --help        # without installing
 ```
 
-Both share one login (`wx login` or `wx-admin login`, a code by e-mail; the same sessions in `~/.wildix/tokens` as
-the Wildix agent skills), the output (text for people, `--output json` for scripts and agents), profiles and shell
-completion. That shared part is the third package, [`wldx-core`](packages/core), on which both depend at the same
+`wx` signs in with the x-bees login (`wx login`, a code by e-mail; the same sessions in `~/.wildix/tokens` as the
+Wildix agent skills). `wx-admin` signs in to the PBX itself (`wx-admin login mypbx`: a Company API Key, or the WMS login
+and password of an administrator); it needs no x-bees account. Both share the output (text for people,
+`--output json` for scripts and agents), prompts and shell completion. That shared part is the third package, [`wldx-core`](packages/core), on which both depend at the same
 version. Node.js 22 or newer; no other dependencies.
 
 ## Development
