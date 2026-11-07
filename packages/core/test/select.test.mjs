@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
 import {test} from 'node:test';
 import {UsageError} from '../src/errors.mjs';
-import {createModel, select} from '../src/select.mjs';
+import {Readable} from 'node:stream';
+import {choose, createModel, select} from '../src/select.mjs';
 
 // Routing: main needs q1 and tt; tt needs nothing; q2 is blocked. Trunks: t1.
 const GROUPS = [
@@ -166,4 +167,59 @@ test('review 7: labels, badges, notes and reasons are drawn without terminal esc
   await select(io, {title: 'T\x1b]0;x\x07', groups, requires: () => []});
   assert.ok(!/\x1b\]|\x1b\[2J|\x07/.test(io.stderr.text), JSON.stringify(io.stderr.text));
   assert.ok(!/a\x1b|a\nb/.test(io.stderr.text));
+});
+
+const ITEMS = [
+  {label: 'Company API Key', note: 'recommended'},
+  {label: 'Login and password', disabled: 'not on this PBX'},
+  {label: 'Something else'},
+];
+
+test('choose: Enter takes the initial item', async () => {
+  const io = terminal(['\r']);
+  assert.equal(await choose(io, {title: 'How?', items: ITEMS}), 0);
+  assert.deepEqual(io.stdin.raw, [true, false]);
+  assert.match(io.stderr.text, /How\?/);
+  assert.match(io.stderr.text, /not on this PBX/);
+});
+
+test('choose: ↓ skips a disabled item', async () => {
+  assert.equal(await choose(terminal(['\x1b[B', '\r']), {title: 't', items: ITEMS}), 2);
+});
+
+test('choose: a digit picks, a disabled digit does not', async () => {
+  assert.equal(await choose(terminal(['3']), {title: 't', items: ITEMS}), 2);
+  assert.equal(await choose(terminal(['2', '1']), {title: 't', items: ITEMS}), 0);
+});
+
+test('choose: Esc and Ctrl-C cancel and restore the terminal', async () => {
+  for (const k of ['\x1b', '\x03']) {
+    const io = terminal([k]);
+    await assert.rejects(choose(io, {title: 't', items: ITEMS}), /Cancelled/);
+    assert.deepEqual(io.stdin.raw, [true, false]);
+  }
+});
+
+test('choose: no terminal is a usage error', async () => {
+  const io = {stdin: Readable.from(['1\n']), stderr: {isTTY: false, write: () => true}};
+  await assert.rejects(
+    choose(io, {title: 't', items: ITEMS}),
+    (e) => e instanceof UsageError && /needs a terminal/.test(e.message),
+  );
+});
+
+test('choose: a terminal without raw mode gets a numbered prompt', async () => {
+  const stdin = Readable.from(['2\n3\n']);
+  stdin.isTTY = true;
+  const stderr = {
+    isTTY: true,
+    text: '',
+    write(s) {
+      this.text += s;
+      return true;
+    },
+  };
+  assert.equal(await choose({stdin, stderr}, {title: 't', items: ITEMS}), 2);
+  assert.match(stderr.text, /1\. Company API Key/);
+  assert.match(stderr.text, /Choose 1, 2 or 3: /);
 });
