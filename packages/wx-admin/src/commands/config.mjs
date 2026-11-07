@@ -9,7 +9,12 @@ import path from 'node:path';
 import {UsageError} from 'wldx-core/errors';
 import {refuseUnsafeWrite} from 'wldx-core/files';
 import {oneLine, paint} from 'wldx-core/format';
-import {pbxClient} from '../pbx.mjs';
+import {select} from 'wldx-core/select';
+import {pbxClient, readSerial} from '../pbx.mjs';
+import {writeExport} from '../transfer/folder.mjs';
+import {readKinds, TRANSFER_KINDS} from '../transfer/kinds.mjs';
+import {toPortable} from '../transfer/refs.mjs';
+import {chooseExport, dbFamiliesOf, selectFrom} from '../transfer/selection.mjs';
 import {maskSecrets} from './trunk.mjs';
 
 const listOf = (r) => (Array.isArray(r) ? r : (r?.records ?? []));
@@ -190,6 +195,51 @@ export function compare(left, right) {
 
 const short = (v) => (v === undefined ? '(none)' : oneLine(JSON.stringify(v), 60));
 
+const interactive = (ctx) => Boolean(ctx.stdin?.isTTY && ctx.stderr?.isTTY);
+
+// A PBX read for a transfer: its objects turned portable (markers instead of references), with where it is.
+export async function exportOf(ctx, client, {users, dbFamily = []}) {
+  const serial = await readSerial(client);
+  if (!serial)
+    ctx.info(
+      'The serial of the PBX is not readable with this access: every pbxid in ACL admin rules is taken as this PBX',
+    );
+  let wms;
+  try {
+    wms = (await client.call('GET', '/PBX/version/', undefined, {scope: 'info'}))?.version;
+  } catch {
+    wms = undefined;
+  }
+  const kinds = Object.keys(TRANSFER_KINDS).filter((k) => k !== 'dialplan-db' && (k !== 'users' || users));
+  const snap = await readKinds(client, kinds, {info: ctx.info});
+  const families = [...new Set([...dbFamiliesOf(Array.isArray(snap.dialplans) ? snap.dialplans : []), ...dbFamily])];
+  Object.assign(snap, await readKinds(client, ['dialplan-db'], {dbFamilies: families, info: ctx.info}));
+  return {
+    portable: toPortable(snap, {serial, host: client.target.host}),
+    source: {host: client.target.host, wms},
+    serial,
+  };
+}
+
+const CHOICE_OPTIONS = {
+  all: {type: 'boolean', description: 'everything (users only with --users)'},
+  only: {
+    type: 'string',
+    placeholder: 'KIND:NAME,…',
+    description: 'only these objects and what they need (NAME * for every one of a kind)',
+  },
+  users: {
+    type: 'boolean',
+    description: 'include the users (portable fields only: no ids, passwords or anything of the PBX)',
+  },
+  'db-family': {
+    type: 'string',
+    multiple: true,
+    placeholder: 'FAMILY',
+    description: 'a family of the dialplan database to carry (besides those the dialplans name)',
+  },
+};
+
 export const groups = {
   config: {
     summary: 'the configuration as files: back up a PBX to a folder, compare a folder or another PBX with a PBX',
@@ -227,6 +277,66 @@ export const groups = {
           `Backed up ${r.pbx} to ${r.dir}`,
           ...Object.entries(r.kinds).map(([k, n]) => `  ${k.padEnd(18)} ${n}`),
         ],
+      },
+      export: {
+        summary: 'choose what to carry to another PBX and write it to a new folder, without anything bound to this PBX',
+        usage: 'wx-admin config export --to DIR [--all | --only KIND:NAME,…] [--users] [--db-family FAMILY]...',
+        details: [
+          'In a terminal, a list to tick opens (an object brings what it needs). References between objects are kept by',
+          'name; ids, LDAP dns, the serial and passwords of this PBX are left out. An object where the serial or the host',
+          `of this PBX is still found is not exported (listed as bound). Kinds: ${Object.keys(TRANSFER_KINDS).join(', ')}.`,
+          'Then: wx-admin config import DIR --pbx OTHER.',
+        ].join('\n'),
+        options: {to: {type: 'string', placeholder: 'DIR', description: 'a new or empty folder'}, ...CHOICE_OPTIONS},
+        args: [0, 0],
+        async run(ctx) {
+          const v = ctx.values;
+          if (!v.to) throw new UsageError('--to is needed', ctx.usage());
+          if (v.all && v.only) throw new UsageError('Give --all or --only, not both', ctx.usage());
+          if (!v.all && !v.only && !interactive(ctx))
+            throw new UsageError(
+              'Without a terminal, choose what to export with --all or --only KIND:NAME,…',
+              ctx.usage(),
+            );
+          const target = path.resolve(ctx.cwd ?? process.cwd(), v.to);
+          refuseUnsafeWrite(target, ctx.env);
+          if (fs.existsSync(target) && fs.readdirSync(target).length)
+            throw new UsageError(`${v.to} is not empty: export into a new or empty folder (nothing was overwritten)`);
+          const client = await pbxClient(ctx);
+          const usersAsked = v.users || (v.only && /(^|,)\s*users(:|,|$)/.test(v.only));
+          const {portable, source} = await exportOf(ctx, client, {users: usersAsked, dbFamily: v['db-family']});
+          const keys = await chooseExport(portable, v, {interactive: interactive(ctx), select: (o) => select(ctx, o)});
+          const chosen = selectFrom(portable, keys);
+          const {dir, counts} = writeExport(ctx, target, {source, portable: chosen});
+          return {
+            dir,
+            pbx: source.host,
+            kinds: counts,
+            bound: portable.bound,
+            external: chosen.external,
+            unresolved: chosen.unresolved,
+            errors: portable.errors,
+          };
+        },
+        text(r, ctx) {
+          const c = paint(ctx);
+          const lines = [
+            `Exported from ${r.pbx} to ${r.dir}`,
+            ...Object.entries(r.kinds).map(([k, n]) => `  ${k.padEnd(18)} ${n}`),
+          ];
+          for (const [k, e] of Object.entries(r.errors ?? {}))
+            lines.push(c.yellow(`  ${k}: not read (${oneLine(e, 100)})`));
+          for (const b of r.bound)
+            lines.push(c.red(`  not exported, bound to ${r.pbx}: ${b.kind}/${b.name} (${b.found} in ${b.path})`));
+          for (const x of r.external)
+            lines.push(c.yellow(`  outside the PBX, kept as it is: ${x.kind}/${x.name} ${x.path} (${x.what})`));
+          for (const x of r.unresolved)
+            lines.push(
+              c.yellow(`  a reference to nothing on ${r.pbx}, kept: ${x.kind}/${x.name} ${x.path} = ${x.value}`),
+            );
+          lines.push(`Next: wx-admin config import ${r.dir} --pbx OTHER`);
+          return lines;
+        },
       },
       diff: {
         summary: 'what differs between a backup folder (or another PBX) and the PBX',

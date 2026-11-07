@@ -247,3 +247,26 @@ test('a secret that was not given is a MissingValue', () => {
   resolve.secret = () => undefined;
   assert.throws(() => fromPortable('trunks-sip', {register: {$secret: 'register'}}, resolve), /secret register/);
 });
+
+test('without the source serial (not readable), every pbxid admin subject is the PBX itself', () => {
+  const p = toPortable(snapshot(), {serial: null, host: SOURCE.host});
+  assert.deepEqual(obj(p, 'acl-groups/Sales').adminRules[0].subject, {$self: 'pbx'});
+});
+
+test('a codec key is not a secret; secret paths use [i] for arrays', () => {
+  const p = toPortable(
+    {
+      'trunks-sip': [
+        {
+          id: '1',
+          name: 't',
+          data: {title: 't', settingsPbx: {audioCodecs: [{key: 'alaw'}], secret: 's'}, keys: [{password: 'p'}]},
+        },
+      ],
+    },
+    SOURCE,
+  );
+  const t = p.kinds['trunks-sip'][0].data;
+  assert.deepEqual(t.settingsPbx.audioCodecs, [{key: 'alaw'}]);
+  assert.deepEqual(t.keys, [{password: {$secret: 'keys[0].password'}}]);
+});

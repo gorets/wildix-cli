@@ -331,6 +331,7 @@ The configuration as files: back up a PBX to a folder, compare a folder or anoth
 | Command | What it does |
 | --- | --- |
 | `wx-admin config backup --to DIR [--only KIND,KIND…]` | write the configuration of the PBX to a new folder, one JSON file per object (passwords masked) |
+| `wx-admin config export --to DIR [--all \| --only KIND:NAME,…] [--users] [--db-family FAMILY]...` | choose what to carry to another PBX and write it to a new folder, without anything bound to this PBX |
 | `wx-admin config diff (<dir> \| --with PBX) [--only KIND,KIND…]` | what differs between a backup folder (or another PBX) and the PBX |
 
 ### wx-admin pbx

@@ -41,7 +41,8 @@ export const APP_REFS = {
 const OUTSIDE = new Set(['moh', 'sounds', 'phonebooks']);
 export const EXTERNAL = {VoiceBot: {botId: 'voicebot'}, DialRemotePbx: {pbx: 'remote-pbx'}};
 
-const SECRET_KEY = /secret|password|passwd|^register$|^key$|apikey|token/i;
+// Secret fields of a trunk ("key" alone is not one: it names a codec).
+const SECRET_KEY = /secret|password|passwd|^register$|apikey|token/i;
 const PBXID = /^pbxid=([^,]+),dc=wildix$/i;
 
 // Values that mean the same on every PBX: nothing, "all", a dialplan expression, a built-in (negative) id.
@@ -148,7 +149,7 @@ export function toPortable(snapshot, {serial, host}) {
         }));
         data.adminRules = (data.adminRules ?? []).map((r) => {
           const m = PBXID.exec(String(r.subject ?? ''));
-          return m && serial && m[1].toLowerCase() === String(serial).toLowerCase()
+          return m && (!serial || m[1].toLowerCase() === String(serial).toLowerCase())
             ? {...r, subject: {$self: 'pbx'}}
             : r;
         });
@@ -188,7 +189,7 @@ export function toPortable(snapshot, {serial, host}) {
 // Every non-empty secret of an object becomes {$secret: <its path>}.
 function hideSecrets(o, base) {
   for (const [k, v] of Object.entries(o)) {
-    const path = base ? `${base}.${k}` : k;
+    const path = Array.isArray(o) ? `${base}[${k}]` : base ? `${base}.${k}` : k;
     if (SECRET_KEY.test(k) && typeof v === 'string' && v !== '') o[k] = {$secret: path};
     else if (v && typeof v === 'object' && !isMarker(v)) hideSecrets(v, path);
   }
