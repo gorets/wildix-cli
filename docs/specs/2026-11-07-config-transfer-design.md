@@ -205,8 +205,11 @@ Exported: extension, name, e-mail, phones, role, license type, language, departm
 acl-groups`), dialplan (`$ref dialplans`), and the other fields of the user model that hold no id. Never:
 `id`, `uid`, `jid`, `login`, `password`, `sipPassword`, anything the safety scan flags.
 
-On import, a new user is created without a password: the PBX generates one (to be confirmed live in the first task
-of the plan, on a temporary user without an e-mail, which is then deleted). A user with an e-mail may get the PBX's
+On import, a new user is created without a password and the PBX accepts it (checked live on WMS 7.11: a temporary
+user without an e-mail and without a password was created, then deleted). The PBX requires `role` and `dialplan` on
+create (400 "This field is required" otherwise): both are always exported. A created user comes back with the fields
+bound to its PBX, all left out of the export: `dn` (`uid=…`), `id`, `sourceId`, `pbxDn` (`pbxid=<serial>`), `pbx`
+(the host), `jid` (`<ext>@<host>`), `groupDn` (`gid=…`, exported as a `$ref`). A user with an e-mail may get the PBX's
 welcome e-mail: the plan says so, counting those users, before the confirmation.
 
 ### 5.5 Next steps
