@@ -367,6 +367,22 @@ The configuration as files: back up a PBX to a folder, compare a folder or anoth
 | `wx-admin config export --to DIR [--all \| --only KIND:NAME,…] [--users] [--db-family FAMILY]...` | choose what to carry to another PBX and write it to a new folder, without anything bound to this PBX |
 | `wx-admin config diff (<dir> \| --with PBX) [--only KIND,KIND…]` | what differs between a backup folder (or another PBX) and the PBX |
 
+### wx-admin kb
+
+The knowledge base of the cloud (WIM): knowledge bases, data sources, documents, search, answers.
+
+| Command | What it does |
+| --- | --- |
+| `wx-admin kb list` | the knowledge bases of the company: name, data sources, last change |
+| `wx-admin kb get <kb>` | one knowledge base with its data sources by name |
+| `wx-admin kb create <name> --source DS... [--description TEXT]` | create a knowledge base from data sources |
+| `wx-admin kb update <kb> [--name NAME] [--description TEXT] [--source DS]... [--yes]` | change a knowledge base: name, description, data sources (--source replaces them: needs --yes) |
+| `wx-admin kb delete <kb>... --yes` | delete knowledge bases (needs --yes; their data sources stay) |
+| `wx-admin kb search <kb> <query> [--limit N]` | search a knowledge base: the chunks found, with their document and score |
+| `wx-admin kb ask <query> --kb KB... [--limit N] [--model MODEL]` | an answer from knowledge bases: search each, then generate the answer from what was found |
+| `wx-admin kb history [--limit N]` | the search queries made on the knowledge bases |
+| `wx-admin kb stats` | statistics of the searches on the knowledge bases |
+
 ### wx-admin pbx
 
 The PBX to work on: saved access (API key, token, user), the default one, a check.

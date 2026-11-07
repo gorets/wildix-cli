@@ -9,6 +9,7 @@ import {groups as acl} from './acl.mjs';
 import {groups as config} from './config.mjs';
 import {groups as device} from './device.mjs';
 import {groups as dialplan} from './dialplan.mjs';
+import {groups as kb} from './kb.mjs';
 import {login, logout} from 'wldx-core/commands/login';
 import {groups as pbx} from './pbx.mjs';
 import {groups as phonebook} from './phonebook.mjs';
@@ -40,6 +41,7 @@ export const GROUPS = {
   ...sound,
   ...records,
   ...config,
+  ...kb,
   ...pbx,
   ...profile,
 };
