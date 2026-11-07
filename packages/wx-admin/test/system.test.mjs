@@ -363,6 +363,6 @@ test('a 403 names the scope of the command', async () => {
     'PUT /PBX/System/Reboot/': new Response(JSON.stringify({type: 'error', reason: 'Forbidden'}), {status: 403}),
   });
   const r = await wx(pbx, ['system', 'reboot', '--yes']);
-  assert.equal(r.code, 1);
+  assert.equal(r.code, 2);
   assert.match(r.stderr, /pbxpower:\*/);
 });

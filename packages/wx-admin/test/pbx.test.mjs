@@ -109,7 +109,7 @@ test('several PBX: --pbx anywhere, the default one, and the PBX of the x-bees lo
     list.pbxs.map((p) => [p.host, p.auth, p.default]),
     [
       ['one.wildixin.com', 'token', true],
-      ['two.wildixin.com', 'basic', false],
+      ['two.wildixin.com', 'password', false],
     ],
   );
   assert.equal(list.login.host, 'own.wildixin.com');
@@ -155,7 +155,7 @@ test('a refusal says what to do, by the kind of access and the scope of the rout
     env,
     fetch: fakeFetch({status: 403, body: {type: 'error', reason: 'Access error', code: 'AccessError'}}),
   });
-  assert.equal(r403.code, 1);
+  assert.equal(r403.code, 2);
   assert.match(r403.stderr, /the scope dialplan:read \(or pbx:read\)/);
   const r401 = await run(['dialplan', 'list', '--pbx', 'ci'], {env, fetch: fakeFetch({status: 401, body: {}})});
   assert.equal(r401.code, 2);
