@@ -4,6 +4,7 @@
 // offers the PBX with saved access. `readOnly: true` on a command that only reads lets it run with --all-pbx
 // (READ_ONLY below sets it).
 import {commands as api} from './api.mjs';
+import {commands as cloud} from './cloud.mjs';
 import {groups as acl} from './acl.mjs';
 import {groups as config} from './config.mjs';
 import {groups as device} from './device.mjs';
@@ -43,7 +44,7 @@ export const GROUPS = {
   ...profile,
 };
 
-export const COMMANDS = {...api, login, logout, status};
+export const COMMANDS = {...api, ...cloud, login, logout, status};
 
 // The commands that only read the PBX (no change there, no file written): they may run with --all-pbx.
 const READ_ONLY = {
@@ -82,4 +83,10 @@ export const GLOBAL_OPTIONS = {
     complete: 'pbxs',
   },
   'all-pbx': {type: 'boolean', description: 'run a command that reads on every PBX'},
+  env: {
+    type: 'string',
+    choices: ['prod', 'stable', 'stage'],
+    key: 'cloudEnv',
+    description: 'the environment of the cloud services (default: the one of the PBX)',
+  },
 };

@@ -398,6 +398,7 @@ Your profiles (the e-mails you are logged in with) and the default one.
 
 | Command | What it does |
 | --- | --- |
+| `wx-admin cloud [<service> [<operation>]] [--param NAME=VALUE]... [--data JSON \| --data-file FILE\|-] [--yes] [--show-secrets]` | any operation of the cloud services (knowledge base, voicebots, WIM tools, Wilma) with the token of the PBX |
 | `wx-admin login [<e-mail>] [--send-code \| --code CODE]` | log in with a one-time code sent to your e-mail |
 | `wx-admin logout [--profile EMAIL] [--everywhere]` | log out: revoke the session of this device, or of every device |
 | `wx-admin status [--profile EMAIL] [--check]` | who you are logged in as, until when, and the version of wx-admin |

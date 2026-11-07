@@ -6,6 +6,7 @@ import {AuthError, UsageError} from 'wldx-core/errors';
 import {clean, paint} from 'wldx-core/format';
 import {program, setProgram} from 'wldx-core/program';
 import {COMMANDS, GLOBAL_OPTIONS, GROUPS} from './commands/index.mjs';
+import {SERVICES} from './cloud/env.mjs';
 import {loginPbxOf, savedPbxs} from './pbx.mjs';
 import {VERSION} from './version.mjs';
 
@@ -57,11 +58,13 @@ export const SPEC = {
       '  --pbx PBX           the PBX: name.wildixin.com, name, an IP, or the serial of a known PBX; else the',
       '                      default one (wx-admin pbx use), else the PBX of the x-bees login',
       "  --all-pbx           run a command that reads on every PBX: saved access, then the x-bees login's",
+      "  --env ENV           the environment of the cloud services: prod, stable or stage (default: the PBX's)",
     ],
     exitCodes: 'Exit codes: 0 done, 1 error, 2 not logged in or the access was refused, 64 wrong usage.',
   },
   // The PBX with saved access, by host and by serial.
   completers: {
+    cloudServices: () => Object.entries(SERVICES).map(([name, s]) => [name, s.label]),
     pbxs: (env) => savedPbxs(env).flatMap((p) => [[p.host, p.auth], ...(p.serial ? [[p.serial, p.host]] : [])]),
   },
   around: (cmd, ctx, io, run) => (ctx.allPbx ? runOnAllPbx(cmd, ctx, io) : run()),
