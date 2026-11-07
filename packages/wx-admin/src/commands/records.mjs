@@ -46,12 +46,13 @@ export function checkNewFile(ctx, to) {
   return file;
 }
 
-// Writes data to a new file (never overwrites; never into hidden or startup folders). Returns the real path.
-export function writeNewFile(ctx, to, data) {
+// Writes data to a new file (never overwrites; never into hidden or startup folders), with `mode` when given (0o600
+// for secrets). Returns the real path.
+export function writeNewFile(ctx, to, data, {mode} = {}) {
   const file = path.resolve(ctx.cwd ?? process.cwd(), to);
   const real = refuseUnsafeWrite(file, ctx.env);
   try {
-    fs.writeFileSync(real, data, {flag: 'wx'});
+    fs.writeFileSync(real, data, {flag: 'wx', ...(mode ? {mode} : {})});
   } catch (e) {
     if (e.code === 'EEXIST') throw new UsageError(`${to} exists: choose another file (nothing was overwritten)`);
     if (e.code === 'ENOENT') throw new UsageError(`No such folder for ${to}`);

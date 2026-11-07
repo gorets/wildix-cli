@@ -454,6 +454,72 @@ The knowledge base of the cloud (WIM): knowledge bases, data sources, documents,
 | `wx-admin kb doc download <ds> <doc> --to FILE` | the original file of a document, to a new file |
 | `wx-admin kb doc delete <ds> <doc>... --yes` | delete documents of a data source (needs --yes) |
 
+### wx-admin wilma
+
+Wilma, the agent platform of the cloud: agents, skills, tools, connectors, secrets, audit, traces.
+
+| Command | What it does |
+| --- | --- |
+| `wx-admin wilma agent list [--search TEXT] [--status draft\|active] [--channel voice\|chat\|assistant]` | the agents of the company: name, channels, engine, status, latest version, last change |
+| `wx-admin wilma agent get <agent> [--version N]` | one agent: its draft, or a published version |
+| `wx-admin wilma agent export <agent> [--version N] --to FILE [--show-secrets]` | write the definition of an agent to a new JSON file, for create or update (masked unless --show-secrets) |
+| `wx-admin wilma agent create --from FILE` | create an agent from a JSON file (an export: only the fields create takes are sent) |
+| `wx-admin wilma agent update <agent> [--from FILE] [--name NAME] [--description TEXT] [--instructions FILE\|-]` | change the draft of an agent: from a JSON file (an export) and/or flags |
+| `wx-admin wilma agent versions <agent>` | the published versions of an agent |
+| `wx-admin wilma agent diff <agent> [--from N\|draft] [--to N\|draft]` | what changed between two versions of an agent, or a version and the draft (default: latest → draft) |
+| `wx-admin wilma agent publish <agent> [--changelog TEXT] [--name TEXT]` | publish the draft of an agent as a new version (it serves nothing until deployed) |
+| `wx-admin wilma agent restore <agent> <version> --yes` | put a published version of an agent back into its draft (the draft is replaced: needs --yes) |
+| `wx-admin wilma agent delete <agent>... --yes [--force]` | delete agents (needs --yes; one in use needs --force too) |
+| `wx-admin wilma agent deploy <agent> <version>[=PERCENT]... --yes \| --reset --yes` | which published versions serve new sessions, and how many of them (changes live traffic: needs --yes) |
+| `wx-admin wilma agent keys <agent>` | the API keys of an agent: name, prefix, created, expires, last used |
+| `wx-admin wilma agent key-create <agent> [--name NAME] [--expires DATE]` | a new API key of an agent: its secret is printed once, here only |
+| `wx-admin wilma agent key-delete <agent> <key>... --yes` | delete API keys of an agent (needs --yes; what uses them stops working) |
+| `wx-admin wilma skill list [--search TEXT] [--status draft\|active]` | the skills of the company: name, visibility, files, status, latest version, last change |
+| `wx-admin wilma skill get <skill> [--version N]` | one skill: its draft, or a published version |
+| `wx-admin wilma skill export <skill> [--version N] --to DIR [--show-secrets]` | write a skill to a new folder: skill.json and its files (masked unless --show-secrets) |
+| `wx-admin wilma skill create --from DIR\|FILE` | create a skill from an export: a folder (skill.json and its files, uploaded first) or a JSON file |
+| `wx-admin wilma skill update <skill> [--from FILE] [--name NAME] [--description TEXT] [--content FILE\|-]` | change the draft of a skill: from a JSON file (an export) and/or flags |
+| `wx-admin wilma skill versions <skill>` | the published versions of a skill |
+| `wx-admin wilma skill diff <skill> [--from N\|draft] [--to N\|draft]` | what changed between two versions of a skill, or a version and the draft (default: latest → draft) |
+| `wx-admin wilma skill publish <skill> [--changelog TEXT]` | publish the draft of a skill as a new version |
+| `wx-admin wilma skill restore <skill> <version> --yes` | put a published version of a skill back into its draft (the draft is replaced: needs --yes) |
+| `wx-admin wilma skill delete <skill>... --yes [--force]` | delete skills (needs --yes; one in use needs --force too) |
+| `wx-admin wilma tool list [--search TEXT] [--status draft\|active]` | the tools of the company: name, category, handler, status, latest version, last change |
+| `wx-admin wilma tool get <tool> [--version N]` | one tool: its draft, or a published version |
+| `wx-admin wilma tool export <tool> [--version N] --to FILE [--show-secrets]` | write the definition of a tool to a new JSON file, for create or update (masked unless --show-secrets) |
+| `wx-admin wilma tool create --from FILE` | create a tool from a JSON file (an export: only the fields create takes are sent) |
+| `wx-admin wilma tool update <tool> [--from FILE] [--name NAME] [--description TEXT] [--category TEXT]` | change the draft of a tool: from a JSON file (an export) and/or flags |
+| `wx-admin wilma tool versions <tool>` | the published versions of a tool |
+| `wx-admin wilma tool diff <tool> [--from N\|draft] [--to N\|draft]` | what changed between two versions of a tool, or a version and the draft (default: latest → draft) |
+| `wx-admin wilma tool publish <tool> [--changelog TEXT]` | publish the draft of a tool as a new version |
+| `wx-admin wilma tool restore <tool> <version> --yes` | put a published version of a tool back into its draft (the draft is replaced: needs --yes) |
+| `wx-admin wilma tool delete <tool>... --yes [--force]` | delete tools (needs --yes; one in use needs --force too) |
+| `wx-admin wilma connector list` | the connectors of the company: name, definition, grant, authorization |
+| `wx-admin wilma connector get <connector>` | one connector |
+| `wx-admin wilma connector export <connector> --to FILE [--show-secrets]` | write the definition of a connector to a new JSON file, for create or update (masked unless --show-secrets) |
+| `wx-admin wilma connector create --from FILE` | create a connector from a JSON file (an export: only the fields create takes are sent) |
+| `wx-admin wilma connector update <connector> [--from FILE] [--name NAME] [--description TEXT]` | change a connector: from a JSON file (an export) and/or flags |
+| `wx-admin wilma connector delete <connector>... --yes [--force]` | delete connectors (needs --yes; one in use needs --force too) |
+| `wx-admin wilma connector catalog [--search TEXT] [--all]` | the connector definitions a connector is made from (deprecated ones only with --all) |
+| `wx-admin wilma connector definition <key> [--version V]` | one connector definition: its configuration fields, tools and authorization |
+| `wx-admin wilma secret list [--search TEXT]` | the secrets of the company: name, description, status, last change (never their values) |
+| `wx-admin wilma secret get <secret>` | one secret: its metadata (never its value) |
+| `wx-admin wilma secret create <name> [--description TEXT] [--attribute KEY=VALUE]...` | a new secret: its value typed hidden or piped in (first line of stdin), never an option |
+| `wx-admin wilma secret rotate <secret>` | a new value for a secret, typed hidden or piped in (what uses it takes the new one) |
+| `wx-admin wilma secret update <secret> [--name NAME] [--description TEXT]` | change the name or description of a secret (its value: secret rotate) |
+| `wx-admin wilma secret delete <secret>... --yes` | delete secrets (needs --yes; what uses them stops working) |
+| `wx-admin wilma connection list [--type shared\|user] [--provider P] [--search TEXT] [--full]` | the connections (OAuth and credentials) of the company: name, type, provider, status, last use |
+| `wx-admin wilma connection get <connection> [--full]` | one connection |
+| `wx-admin wilma connection verify <connection>` | ask the provider whether a connection works |
+| `wx-admin wilma connection delete <connection>... --yes` | delete connections (needs --yes; what uses them stops working) |
+| `wx-admin wilma audit list [--uri URI \| --prefix URI] [--action A] [--actor ID] [--since DATE] [--until DATE] [--limit N]` | the audit log of Wilma objects, newest first: time, action, object, who |
+| `wx-admin wilma audit get <event>` | one audit event with its changes |
+| `wx-admin wilma audit uses <uri>` | who uses an object (the agents that use a skill or a tool, their drafts too) |
+| `wx-admin wilma trace list [--service S] [--status S] [--since DATE] [--until DATE] [--search TEXT] [--filter KEY=VALUE]... [--limit N]` | the traces of Wilma sessions (voice, chat, assistant, copilot, tools, workflow), newest first |
+| `wx-admin wilma trace get <trace>` | one trace and its spans as a timeline |
+| `wx-admin wilma trace model-call <trace> <span>` | one model call of a trace: model, settings, tokens, messages |
+| `wx-admin wilma usage [--service S] [--since DATE] [--until DATE] [--interval hour\|day\|week\|month\|total] [--group-by KEY]... [--filter KEY=VALUE]...` | usage of Wilma over a time window: tokens, call seconds, spans, errors… by service, agent or channel |
+
 ### wx-admin pbx
 
 The PBX signed in to (wx-admin login): the list, the default one, a check.

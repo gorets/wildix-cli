@@ -21,6 +21,7 @@ import {groups as sound} from './sound.mjs';
 import {groups as system} from './system.mjs';
 import {groups as trunk} from './trunk.mjs';
 import {groups as user} from './user.mjs';
+import {groups as wilma} from './wilma.mjs';
 
 // In the order of the help: the PBX and its people, routing, trunks and devices, content and records, access.
 export const GROUPS = {
@@ -41,6 +42,7 @@ export const GROUPS = {
   ...records,
   ...config,
   ...kb,
+  ...wilma,
   ...pbx,
 };
 
