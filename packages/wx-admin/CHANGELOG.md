@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.0 — 2026-11-07
 
 - Cloud services with the CPA token of the PBX (Cognito PBX Auth: the cloud identity the PBX gives its
   administrator, on the internal route `GET /api/v1/PBX/integration/x-bees`): `wx-admin kb` for the knowledge base

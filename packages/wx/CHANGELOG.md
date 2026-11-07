@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0 — 2026-11-07
+
+- Nothing of its own: released with `wx-admin` 1.3.0 (cloud services: the knowledge base, voicebots, WIM tools,
+  Wilma) and `wldx-core` 1.3.0. The check for a newer version waits for npm by itself (on Node 22 its tests could end
+  before it).
+
 ## 1.2.1 — 2026-11-07
 
 - `wx` says when a newer version is on npm (once a day, one line after the command; `WX_NO_UPDATE_CHECK=1` turns

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.0 — 2026-11-07
 
 - Fixed: the short wait for npm at the end of a command holds the process by itself (Node 22 could end the run
   before it when nothing else did).

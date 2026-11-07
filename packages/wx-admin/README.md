@@ -1,10 +1,10 @@
 # wldx-admin-cli — `wx-admin`, an admin command line for the Wildix PBX
 
-**Version 1.2.1** · unofficial · MIT
+**Version 1.3.0** · unofficial · MIT
 
 `wx-admin` manages a Wildix PBX through its REST API (`https://<pbx>/api/v1`): the system and its settings, users,
 ACL, queues, dialplans and the objects they use (timetables, IVR, switches, paging, the dialplan database), trunks,
-devices, phonebooks, sounds, call history, recordings and voicemails; any other operation through `wx-admin api`. It works with several PBX at once. Its twin for the everyday user is
+devices, phonebooks, sounds, call history, recordings and voicemails; any other operation through `wx-admin api`. It works with several PBX at once, and also manages the cloud services of the PBX's company (the knowledge base, voicebots, WIM tools, Wilma) with the cloud token the PBX gives its administrator. Its twin for the everyday user is
 [`wx`](https://github.com/gorets/wildix-cli/tree/main/packages/wx) (npm `wldx-cli`); they share the x-bees login.
 
 ```sh
