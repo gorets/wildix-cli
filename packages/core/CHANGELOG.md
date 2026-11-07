@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: the short wait for npm at the end of a command holds the process by itself (Node 22 could end the run
+  before it when nothing else did).
 - A group may hold a group: three words name a command (`wx-admin kb source list`), in the router, the help, the
   completion and `commandsOf()` for the README generators.
 - A global option may name its key in the context (`key`); one that would take the name of a field of the context

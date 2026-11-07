@@ -86,10 +86,8 @@ export function startUpdateCheck(argv, io) {
       if (pending) {
         await Promise.race([
           pending,
-          new Promise((resolve) => {
-            const t = setTimeout(resolve, WAIT_MS);
-            t.unref?.();
-          }),
+          // kept referenced: this short wait must hold the process itself, whatever keeps the request alive
+          new Promise((resolve) => setTimeout(resolve, WAIT_MS)),
         ]);
         cut = true;
         controller.abort();
