@@ -15,6 +15,8 @@
 // parseArgs option plus `description` (help and completion), `placeholder`, `choices` (the router refuses other
 // values, completion offers them) and `complete: 'profiles'|<a completer of the spec>` (completion offers values).
 // A global option of type string may set `needs` (the error when its value is missing: "--pbx needs a PBX host").
+// A global option reaches commands as ctx.<camel-cased name>, or ctx.<key> when it sets `key` (it must, when that
+// name is a field of the context, e.g. --env: ctx.env is the environment of the process).
 
 export const COMMON_OPTIONS = {
   help: {type: 'boolean', short: 'h', description: 'help of the command'},

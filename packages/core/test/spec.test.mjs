@@ -2,6 +2,7 @@
 // ctx), values for completion, a wrapper around run(), lines of the main help; and the program name everywhere.
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {createMain} from '../src/cli.mjs';
 import {complete, completionScript, completionUsage} from '../src/completion.mjs';
 import {program, setProgram} from '../src/program.mjs';
 import {SPEC, run, tempConfigDir} from './helpers.mjs';
@@ -94,4 +95,32 @@ test('the program name is in the scripts, the help and the messages', async () =
   } finally {
     setProgram(before);
   }
+});
+
+test('a global option with key reaches ctx under that key; ctx.env stays the environment', async () => {
+  const show = {
+    summary: 's',
+    usage: 'wx show',
+    options: {},
+    args: [0, 0],
+    run: (ctx) => ({cloudEnv: ctx.cloudEnv ?? null, hasEnv: typeof ctx.env === 'object'}),
+  };
+  const registry = {
+    groups: {},
+    commands: {show},
+    globals: {env: {type: 'string', choices: ['prod', 'stage'], key: 'cloudEnv', description: 'e'}},
+  };
+  const r = await run(['show', '--env', 'stage'], {registry});
+  assert.equal(r.code, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout), {cloudEnv: 'stage', hasEnv: true});
+  assert.deepEqual(JSON.parse((await run(['--env=prod', 'show'], {registry})).stdout), {
+    cloudEnv: 'prod',
+    hasEnv: true,
+  });
+  assert.equal((await run(['show', '--env', 'other'], {registry})).code, 64);
+});
+
+test('a global option whose context key would be a reserved name (env) is refused when the program is made', () => {
+  assert.throws(() => createMain({groups: {}, commands: {}, globals: {env: {type: 'string'}}}), /env.*key/);
+  assert.doesNotThrow(() => createMain({groups: {}, commands: {}, globals: {env: {type: 'string', key: 'cloudEnv'}}}));
 });

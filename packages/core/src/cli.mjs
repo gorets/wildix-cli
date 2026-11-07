@@ -46,7 +46,7 @@ export function takeGlobals(argv, globals = GLOBAL_OPTIONS) {
     }
     if (o.type === 'boolean') {
       if (name === 'no-color') g.color = false;
-      else g[camel(name)] = true;
+      else g[o.key ?? camel(name)] = true;
       continue;
     }
     const value = a === `--${name}` ? argv[(i += 1)] : a.slice(name.length + 3);
@@ -57,11 +57,11 @@ export function takeGlobals(argv, globals = GLOBAL_OPTIONS) {
         );
     } else {
       if (!value || value.startsWith('--')) throw new UsageError(`--${name} needs ${o.needs ?? 'a value'}`);
-      const before = g[camel(name)];
+      const before = g[o.key ?? camel(name)];
       if (before !== undefined && before.toLowerCase() !== value.toLowerCase())
         throw new UsageError(`--${name} given twice: ${before} and ${value}`);
     }
-    g[camel(name)] = value;
+    g[o.key ?? camel(name)] = value;
   }
   return {globals: g, rest};
 }
@@ -182,7 +182,9 @@ async function runCommand(cmd, args, needsAuth, io) {
   const freshToken = () => getToken({profile: values.profile, env: io.env, fetchImpl: io.fetch, now: io.now()});
   const token = needsAuth ? await freshToken() : undefined;
   const stop = stopSignal(io);
-  const own = Object.fromEntries(Object.keys(spec.globals ?? {}).map((name) => [camel(name), io.globals[camel(name)]]));
+  const own = Object.fromEntries(
+    Object.entries(spec.globals ?? {}).map(([name, o]) => [o.key ?? camel(name), io.globals[o.key ?? camel(name)]]),
+  );
   const ctx = {
     ...own,
     values,
@@ -254,7 +256,30 @@ async function dispatch(all, io) {
 // logged in (or the access was refused), 3 nothing to show (an error with exitCode 3), 64 wrong usage.
 // io replaces the process streams, environment, fetch, clock and (in tests) the commands themselves:
 // io.registry = {groups, commands} takes the place of those of the spec.
+// Context keys a global option may not take: the context has its own fields of these names.
+const RESERVED = new Set([
+  'env',
+  'values',
+  'positionals',
+  'token',
+  'profile',
+  'output',
+  'color',
+  'signal',
+  'stdin',
+  'stdout',
+  'stderr',
+  'fetch',
+  'now',
+  'cwd',
+]);
+
 export function createMain(spec) {
+  for (const [name, o] of Object.entries(spec.globals ?? {})) {
+    const key = o.key ?? camel(name);
+    if (RESERVED.has(key))
+      throw new Error(`The global option --${name} would be ctx.${key}, a field of the context: give it a key`);
+  }
   return async function main(argv, io = {}) {
     io = {
       stdout: process.stdout,
