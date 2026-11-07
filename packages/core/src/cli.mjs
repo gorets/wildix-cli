@@ -23,6 +23,7 @@ import {SHELLS, TOP_LEVEL, complete, completionScript, completionUsage} from './
 import {AuthError, UsageError} from './errors.mjs';
 import {clean, toText} from './format.mjs';
 import {program} from './program.mjs';
+import {startUpdateCheck} from './update.mjs';
 import {COMMON_OPTIONS, GLOBAL_OPTIONS, commandOf, globalsOf, groupOf, singleOf} from './registry.mjs';
 
 const camel = (name) => name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
@@ -267,19 +268,27 @@ export function createMain(spec) {
       ...io,
     };
     io.spec = io.registry ? {...spec, ...io.registry} : spec;
-    try {
-      await dispatch(argv, io);
-      return 0;
-    } catch (e) {
-      line(io.stderr, `${program.name}: ${clean(e.message)}`);
-      if (e instanceof UsageError) {
-        if (e.usage) line(io.stderr, `\n${e.usage}`);
-        return 64;
-      }
-      if (e instanceof AuthError) return 2;
-      if (Number.isInteger(e.exitCode)) return e.exitCode;
-      if (io.env.WX_DEBUG === '1' && e.stack) line(io.stderr, e.stack);
-      return 1;
-    }
+    const update = startUpdateCheck(argv, io); // a newer version on npm: one line after the command
+    const code = await run(argv, io);
+    await update.finish();
+    return code;
   };
+}
+
+// The command, its errors turned into the exit code: 0 done, 1 error, 2 not logged in, 3 nothing to show, 64 usage.
+async function run(argv, io) {
+  try {
+    await dispatch(argv, io);
+    return 0;
+  } catch (e) {
+    line(io.stderr, `${program.name}: ${clean(e.message)}`);
+    if (e instanceof UsageError) {
+      if (e.usage) line(io.stderr, `\n${e.usage}`);
+      return 64;
+    }
+    if (e instanceof AuthError) return 2;
+    if (Number.isInteger(e.exitCode)) return e.exitCode;
+    if (io.env.WX_DEBUG === '1' && e.stack) line(io.stderr, e.stack);
+    return 1;
+  }
 }

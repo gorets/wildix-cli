@@ -410,6 +410,13 @@ As in the internal Wildix CLI: text for people by default, `--output json` for s
 PBX, `{"type":"result","result":X}` unwrapped to X), `--pretty`, `--no-color`; they may stand anywhere. Messages for
 people (notes, prompts) go to stderr.
 
+## Updates
+
+Once a day, while a command runs in a terminal, `wx-admin` asks npm for its latest version (in the background, never
+holding the command); when there is a newer one, a line after the output says so (`npm i -g wldx-admin-cli`).
+Nothing is installed by itself. Off in CI, under `npx`, without a terminal, with `--output json`, or with
+`WX_NO_UPDATE_CHECK=1`.
+
 ## Exit codes
 
 `0` done · `1` error (network, the PBX refused the request) · `2` not logged in, or the PBX refused the access ·

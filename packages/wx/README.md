@@ -297,6 +297,14 @@ which profile it used and why. The default is kept in `~/.wildix/wx.json`.
 | `WILDIX_STREAM_URL`, `WILDIX_WDA_URL` | another chat or analytics address; only `https://<host>.wildix.com` |
 | `WILDIX_STREAM_WS_URL`, `WILDIX_WDA_WS_URL`, `WILDIX_XBEES_URL`, `WILDIX_PBX_URL` | other addresses, only with `WILDIX_ALLOW_CUSTOM_URL=1` (tests) |
 | `WX_DEBUG=1` | print the stack of an unexpected error |
+| `WX_NO_UPDATE_CHECK=1` | never check npm for a newer version (also off in CI, under `npx`, without a terminal, with `--output json`) |
+
+## Updates
+
+Once a day, while a command runs in a terminal, `wx` asks npm for its latest version (in the background, never
+holding the command); when there is a newer one, a line after the output says so: `wx 1.2.0 → 1.3.0 is out: npm i -g
+wldx-cli`. Nothing is installed by itself. Off in CI, under `npx`, without a terminal, with `--output json`, or with
+`WX_NO_UPDATE_CHECK=1`.
 
 ## Exit codes
 

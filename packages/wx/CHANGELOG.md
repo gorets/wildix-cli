@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `wx` says when a newer version is on npm (once a day, one line after the command; `WX_NO_UPDATE_CHECK=1` turns
+  it off).
+
 ## 1.2.0 — 2026-11-07
 
 - Nothing of its own: released with `wx-admin` 1.2.0 (config export, import and copy) and `wldx-core` 1.2.0 (a

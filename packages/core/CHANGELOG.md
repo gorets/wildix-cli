@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- A check for a newer version on npm, once a day in the background (`$WILDIX_CONFIG_DIR/update-check.json`): one
+  line on stderr after the command when there is one; never in CI, under `npx`, without a terminal, with `--output
+  json`, or with `WX_NO_UPDATE_CHECK=1`; the registry never holds a command (at most 300 ms at its end).
+
 ## 1.2.0 — 2026-11-07
 
 - `wldx-core/select`: a checkbox tree for the terminal without dependencies (groups, badges, items that bring

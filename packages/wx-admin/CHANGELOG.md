@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- `wx-admin` says when a newer version is on npm (once a day, one line after the command; `WX_NO_UPDATE_CHECK=1`
+  turns it off).
+
 ## 1.2.0 — 2026-11-07
 
 - `wx-admin config export | import | copy`: carry a chosen part of the configuration to another PBX without
