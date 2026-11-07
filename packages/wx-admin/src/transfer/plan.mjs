@@ -91,34 +91,46 @@ export function makePlan(portable, target, {serial, host, licenses, sounds, moh,
     }
   }
 
-  // Warnings: values outside the transfer missing on the target, queue members who are not users there, external
-  // values, references to nothing on the source.
+  // Warnings, {type, value, path?, text}: values outside the transfer missing on the target (sound, moh, phonebook;
+  // not-checked when the target's list was not read), queue members who are not users there (member), values outside
+  // the PBX (external), references to nothing on the source (unresolved).
   const has = {sounds, moh, phonebooks};
+  const TYPE = {sounds: 'sound', moh: 'moh', phonebooks: 'phonebook'};
+  const warn = (key, w) => byKey.get(key)?.warnings.push(w);
   for (const x of portable.outside ?? []) {
-    const it = byKey.get(x.from);
-    if (!it) continue;
     const list = has[x.kind];
-    if (!list) it.warnings.push(`${OUTSIDE_NAMES[x.kind]} ${x.value} (${x.path}) was not checked on ${host}`);
+    const w = {type: TYPE[x.kind], value: x.value, path: x.path};
+    if (!list)
+      warn(x.from, {
+        ...w,
+        type: 'not-checked',
+        text: `${OUTSIDE_NAMES[x.kind]} ${x.value} (${x.path}) was not checked on ${host}`,
+      });
     else if (!list.map(String).includes(String(x.value)))
-      it.warnings.push(`${OUTSIDE_NAMES[x.kind]} ${x.value} is not on ${host} (${x.path})`);
+      warn(x.from, {...w, text: `${OUTSIDE_NAMES[x.kind]} ${x.value} is not on ${host} (${x.path})`});
   }
   for (const [from, keys] of Object.entries(portable.soft ?? {})) {
-    const it = byKey.get(from);
-    if (!it) continue;
     for (const k of keys) {
       const mine = byKey.get(k);
       if (Object.hasOwn(ids, k) || (mine && mine.state !== 'blocked')) continue;
-      it.warnings.push(`${splitKey(k).name} is not a user on ${host} (nor a user of the export)`);
+      const value = splitKey(k).name;
+      warn(from, {type: 'member', value, text: `${value} is not a user on ${host} (nor a user of the export)`});
     }
   }
   for (const x of portable.external ?? [])
-    byKey
-      .get(keyOf(x.kind, x.name))
-      ?.warnings.push(`${x.path} is outside the PBX (${x.what}), kept as it is: check it works for ${host}`);
+    warn(keyOf(x.kind, x.name), {
+      type: 'external',
+      value: x.what,
+      path: x.path,
+      text: `${x.path} is outside the PBX (${x.what}), kept as it is: check it works for ${host}`,
+    });
   for (const x of portable.unresolved ?? [])
-    byKey
-      .get(keyOf(x.kind, x.name))
-      ?.warnings.push(`${x.path} = ${x.value} pointed at nothing on the source, kept as it is`);
+    warn(keyOf(x.kind, x.name), {
+      type: 'unresolved',
+      value: x.value,
+      path: x.path,
+      text: `${x.path} = ${x.value} pointed at nothing on the source, kept as it is`,
+    });
 
   const counts = {new: 0, same: 0, differs: 0, blocked: 0};
   for (const it of items) counts[it.state] += 1;

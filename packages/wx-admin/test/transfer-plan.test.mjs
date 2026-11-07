@@ -145,12 +145,17 @@ test('missing sounds and music on hold are warnings; queue members missing as us
   const main = item(p, 'dialplans/main');
   assert.notEqual(main.state, 'blocked');
   assert.ok(
-    main.warnings.some((w) => /music on hold jazz is not on b\.wildixin\.com/.test(w)),
-    main.warnings.join('|'),
+    main.warnings.some(
+      (w) => w.type === 'moh' && w.value === 'jazz' && /music on hold jazz is not on b\.wildixin\.com/.test(w.text),
+    ),
   );
-  assert.ok(!main.warnings.some((w) => /hello/.test(w)));
-  assert.ok(item(p, 'queues/support').warnings.some((w) => /777 is not a user/.test(w)));
-  assert.ok(!item(p, 'queues/support').warnings.some((w) => /101 is not a user/.test(w)));
+  assert.ok(!main.warnings.some((w) => /hello/.test(w.text)));
+  assert.ok(
+    item(p, 'queues/support').warnings.some(
+      (w) => w.type === 'member' && w.value === '777' && /777 is not a user/.test(w.text),
+    ),
+  );
+  assert.ok(!item(p, 'queues/support').warnings.some((w) => /101 is not a user/.test(w.text)));
 });
 
 test('counts and the target ids for writing', () => {
