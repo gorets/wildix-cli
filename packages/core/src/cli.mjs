@@ -103,7 +103,9 @@ function mainUsage(spec) {
     '  --pretty            indent the JSON',
     '  --no-color          no colors in the text',
     ...(spec.help?.options ?? []),
-    '  --profile EMAIL     the profile (a logged-in e-mail) to use; else WILDIX_EMAIL, else the default',
+    ...(spec.profiles === false
+      ? []
+      : ['  --profile EMAIL     the profile (a logged-in e-mail) to use; else WILDIX_EMAIL, else the default']),
     `  -h, --help          help of ${program.name}, a command or a subcommand`,
     `  -v, --version       the version of ${program.name}`,
     '',
@@ -189,8 +191,9 @@ async function runCommand(cmd, args, needsAuth, io) {
     );
   }
 
+  const profiles = spec.profiles !== false;
   const freshToken = () => getToken({profile: values.profile, env: io.env, fetchImpl: io.fetch, now: io.now()});
-  const token = needsAuth ? await freshToken() : undefined;
+  const token = profiles && needsAuth ? await freshToken() : undefined;
   const stop = stopSignal(io);
   const own = Object.fromEntries(
     Object.entries(spec.globals ?? {}).map(([name, o]) => [o.key ?? camel(name), io.globals[o.key ?? camel(name)]]),
@@ -199,9 +202,7 @@ async function runCommand(cmd, args, needsAuth, io) {
     ...own,
     values,
     positionals,
-    token,
-    freshToken,
-    profile: values.profile,
+    ...(profiles ? {token, freshToken, profile: values.profile} : {}),
     client: (factory) => factory({token, env: io.env, fetchImpl: io.fetch}),
     output: io.globals.output,
     color: io.globals.color && !io.env.NO_COLOR && Boolean(io.stdout.isTTY),
@@ -258,15 +259,14 @@ async function dispatch(all, io) {
   if (sub === '-h' || sub === '--help') return line(io.stdout, groupUsage(first, group));
   if (!sub) throw new UsageError(`${program.name} ${first} needs a command`, groupUsage(first, group));
   const cmd = commandOf(group, sub);
-  if (!cmd) throw new UsageError(`Unknown command: ${program.name} ${first} ${sub}`, groupUsage(first, group));
+  if (!cmd) throw new UsageError(`Unknown command: ${first} ${sub}`, groupUsage(first, group));
   if (isGroup(cmd)) {
     const [third, ...more] = rest;
     const name = `${first} ${sub}`;
     if (third === '-h' || third === '--help') return line(io.stdout, groupUsage(name, cmd));
     if (!third) throw new UsageError(`${program.name} ${name} needs a command`, groupUsage(name, cmd));
     const inner = commandOf(cmd, third);
-    if (!inner || isGroup(inner))
-      throw new UsageError(`Unknown command: ${program.name} ${name} ${third}`, groupUsage(name, cmd));
+    if (!inner || isGroup(inner)) throw new UsageError(`Unknown command: ${name} ${third}`, groupUsage(name, cmd));
     return runCommand(inner, more, Boolean(inner.auth ?? cmd.auth ?? group.auth), io);
   }
   return runCommand(cmd, rest, Boolean(cmd.auth ?? group.auth), io);
@@ -299,6 +299,14 @@ export function createMain(spec) {
     const key = o.key ?? camel(name);
     if (RESERVED.has(key))
       throw new Error(`The global option --${name} would be ctx.${key}, a field of the context: give it a key`);
+  }
+  if (spec.profiles === false) {
+    const needing = [
+      ...Object.entries(spec.commands ?? {}).filter(([, c]) => c.auth),
+      ...Object.entries(spec.groups ?? {}).filter(([, g]) => g.auth || commandsOf(g).some((c) => c.auth)),
+    ].map(([n]) => n);
+    if (needing.length)
+      throw new Error(`profiles: false, but these need the x-bees login (auth): ${needing.join(', ')}`);
   }
   return async function main(argv, io = {}) {
     io = {

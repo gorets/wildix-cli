@@ -7,6 +7,7 @@
 //     help:     {options: [lines], exitCodes: 'line'}   its lines in the main help (options of its own globals)
 //     completers: {kind: (env) => [[value, description?], ...]}   values for `complete: kind` (options, commands)
 //     around(cmd, ctx, io, run)     optional: runs a command instead of run(ctx) (e.g. once per PBX)
+//     profiles: false              optional: no x-bees profiles (no --profile, no token in ctx, no `auth`)
 //   }
 //
 // A group is {summary, auth?, commands: {name: Command}}; a Command is
@@ -40,8 +41,12 @@ export const GLOBAL_OPTIONS = {
   'no-color': {type: 'boolean', description: 'no colors in the text'},
 };
 
-// The global options of a spec: its own first (they come first in the help), then the common ones.
-export const globalsOf = (spec) => ({...(spec.globals ?? {}), ...GLOBAL_OPTIONS});
+// The global options of a spec: its own first (they come first in the help), then the common ones; without --profile
+// for a command line with no x-bees profiles (`profiles: false`).
+export function globalsOf(spec) {
+  const {profile, ...common} = GLOBAL_OPTIONS;
+  return {...(spec.globals ?? {}), ...(spec.profiles === false ? common : {profile, ...common})};
+}
 
 const own = (o, k) => (o && Object.hasOwn(o, k) ? o[k] : undefined);
 export const groupOf = (name, spec) => own(spec.groups, name);

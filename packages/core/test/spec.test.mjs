@@ -152,11 +152,45 @@ test('a group may hold a group: three words name a command; help, errors and com
   assert.match(r.stderr, /wx kb source needs a command/);
   assert.match(r.stderr, /wx kb source list/);
   r = await run(['kb', 'source', 'nope'], {registry});
-  assert.match(r.stderr, /Unknown command: wx kb source nope/);
+  assert.match(r.stderr, /^wx: Unknown command: kb source nope$/m);
   r = await run(['kb', '-h'], {registry, output: 'text'});
   assert.match(r.stdout, /wx kb source list/);
   const spec = {...SPEC, ...registry};
   assert.deepEqual(complete(['kb', 's'], {}, spec), ['source\tdata sources']);
   assert.deepEqual(complete(['kb', 'source', ''], {}, spec), ['list\tthe sources']);
   assert.ok(complete(['kb', 'source', 'list', '--'], {}, spec).includes('--all\ta'));
+});
+
+test('profiles: false — no --profile in the help, completion or parsing, and no x-bees token in ctx', async () => {
+  let seenCtx;
+  const look = {
+    summary: 'looks at its context',
+    usage: 'wx look',
+    options: {},
+    args: [0, 0],
+    run: (ctx) => {
+      seenCtx = ctx;
+      return {};
+    },
+  };
+  const registry = {groups: {}, commands: {look}, profiles: false};
+  const help = await run([], {registry, output: 'text'});
+  assert.doesNotMatch(help.stdout, /--profile/);
+  assert.equal((await run(['look', '--profile', 'a@b.c'], {registry})).code, 64);
+  assert.equal((await run(['look'], {registry})).code, 0);
+  assert.ok(!('freshToken' in seenCtx) && !('token' in seenCtx) && !('profile' in seenCtx));
+  assert.ok(!complete(['--'], {}, {...SPEC, ...registry}).some((w) => w.startsWith('--profile')));
+  assert.doesNotMatch((await run(['look', '-h'], {registry, output: 'text'})).stdout, /--profile/);
+});
+
+test('profiles: false refuses a command that needs the x-bees login when the program is made', () => {
+  const needs = {summary: 's', usage: 'wx n', options: {}, args: [0, 0], auth: true, run: () => ({})};
+  assert.throws(() => createMain({groups: {}, commands: {n: needs}, profiles: false}), /auth/);
+});
+
+test('Unknown command names the program once', async () => {
+  const registry = {groups: {g: {summary: 'g', commands: {a: show}}}, commands: {}};
+  const r = await run(['g', 'nope'], {registry, output: 'text'});
+  assert.equal(r.code, 64);
+  assert.match(r.stderr, /^wx: Unknown command: g nope$/m);
 });
