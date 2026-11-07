@@ -57,12 +57,14 @@ the CPA token is never shown, logged or sent anywhere but those services.
 
 | Service | prod | stable | stage |
 | --- | --- | --- | --- |
-| `kb` | `https://kb.wim.wildix.com` | `https://kb.wim-stable.wildix.com` | `https://kb.wim-stage.wildix.com` |
+| `kb` | `https://kb.wim.wildix.com` | — (none) | `https://kb.wim-stage.wildix.com` |
 | `voicebots` | `https://wim.wildix.com` | `https://wim-stable.wildix.com` | `https://wim-stage.wildix.com` |
 | `tools` | `https://tools.wim.wildix.com` | `https://tools.wim-stable.wildix.com` | `https://tools.wim-stage.wildix.com` |
 | `wilma` | `https://api.wilma.wildix.com` | `https://api-stable.wilma.wildix.com` | `https://api-stage.wilma.wildix.com` |
 
-  (The `servers` of the specs, 2026-11-07.) An environment a spec has no server for is refused with the ones it has.
+  (The `servers` of the specs, 2026-11-07, corrected where the service does not exist: the knowledge base has no
+  stable, although its spec names `kb.wim-stable.wildix.com`.) An environment a service has no server for is refused
+  with the ones it has: `--env stable` with `kb` → "the knowledge base has no stable environment: prod or stage".
 
 ### 2.3 Client
 
