@@ -39,8 +39,8 @@ export const DELETE_DATA = [
   'applications',
   'devices',
 ];
-// The fields a list asks for without --full: no e-mail, phone or picture of other people.
-const LIST_FIELDS = 'id,extension,name,role,licenseType,groupName,groupDn,department,language,dialplan';
+// The fields a list asks for without --full: the e-mail, but no phone or picture of other people.
+const LIST_FIELDS = 'id,extension,name,email,role,licenseType,groupName,groupDn,department,language,dialplan';
 const SECRETS = ['password', 'sipPassword'];
 
 const withoutSecrets = (u) =>
@@ -227,7 +227,7 @@ export const groups = {
         usage:
           'wx-admin user list [--search TEXT] [--group GROUP] [--department NAME] [--role ROLE] [--license TYPE] [--sort FIELD [--desc]] [--limit N] [--start N] [--full]',
         details:
-          'Filters are exact (--department "Level 1"); --search looks into every field. E-mails and phones only with --full.',
+          'Filters are exact (--department "Level 1"); --search looks into every field. Phones only with --full.',
         options: {
           search: {type: 'string', placeholder: 'TEXT', description: 'users with this text in any field'},
           group: {type: 'string', placeholder: 'GROUP', description: 'users of this user group: its name, id or DN'},
@@ -238,7 +238,7 @@ export const groups = {
           desc: {type: 'boolean', description: 'sort in descending order'},
           limit: {type: 'string', placeholder: 'N', description: 'at most N users (default: all)'},
           start: {type: 'string', placeholder: 'N', description: 'skip the first N users (paging)'},
-          full: {type: 'boolean', description: 'every field, e-mails and phones included'},
+          full: {type: 'boolean', description: 'every field, phones included'},
         },
         args: [0, 0],
         readOnly: true,
@@ -270,11 +270,12 @@ export const groups = {
           const rows = records.map((u) => [
             u.extension,
             u.name,
+            u.email ?? '',
             u.role,
             u.licenseType,
             u.groupName ?? '',
             u.department ?? '',
-            ...(full ? [u.email ?? '', u.mobilePhone || u.officePhone || ''] : []),
+            ...(full ? [u.mobilePhone || u.officePhone || ''] : []),
           ]);
           const start = Number(ctx.values.start ?? 0);
           const more =

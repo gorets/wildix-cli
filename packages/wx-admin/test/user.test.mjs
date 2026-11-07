@@ -125,7 +125,7 @@ const registry = {groups};
 const wx = (pbx, argv, options = {}) =>
   run([...argv, '--pbx', 'demo'], {env: env(), fetch: pbx.fetch, registry, ...options});
 
-test('list: fields without --full, filters (the group by name), paging and its note in the text', async () => {
+test('list: fields without --full (the e-mail too), filters (the group by name), paging and its note in the text', async () => {
   const pbx = fakePbx();
   let r = await wx(
     pbx,
@@ -138,10 +138,13 @@ test('list: fields without --full, filters (the group by name), paging and its n
   assert.equal(q.get('filter[role][]'), 'user');
   assert.equal(q.get('count'), '1');
   assert.equal(q.get('dir'), 'desc');
-  assert.ok(!q.get('fields').includes('email'));
+  assert.ok(q.get('fields').split(',').includes('email'));
+  assert.ok(!q.get('fields').includes('Phone'));
   assert.equal(pbx.calls[0].path, '/Groups/');
-  assert.match(r.stdout, /^102 +Bob Test +user +basic +Default\n1 of 2 users: --start 1 for the next ones\n$/);
-  assert.doesNotMatch(r.stdout, /example\.com/);
+  assert.match(
+    r.stdout,
+    /^102 +Bob Test +bob@example\.com +user +basic +Default\n1 of 2 users: --start 1 for the next ones\n$/,
+  );
   r = await wx(pbx, ['user', 'list', '--full'], {output: 'text'});
   assert.equal(pbx.last().query.get('fields'), null);
   assert.match(r.stdout, /anna@example\.com/);
