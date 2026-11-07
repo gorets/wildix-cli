@@ -382,6 +382,19 @@ The knowledge base of the cloud (WIM): knowledge bases, data sources, documents,
 | `wx-admin kb ask <query> --kb KB... [--limit N] [--model MODEL]` | an answer from knowledge bases: search each, then generate the answer from what was found |
 | `wx-admin kb history [--limit N]` | the search queries made on the knowledge bases |
 | `wx-admin kb stats` | statistics of the searches on the knowledge bases |
+| `wx-admin kb source list [--show-secrets]` | the data sources: type, schedule (keys masked) |
+| `wx-admin kb source get <ds> [--show-secrets]` | one data source with its configuration and sync status (keys masked) |
+| `wx-admin kb source create <name> --type confluence\|website\|files [--description TEXT]` | create a data source (then: kb source configure, kb source sync) |
+| `wx-admin kb source configure <ds> [--url URL]... [--user EMAIL] [--space ID] [--page ID]... [--schedule SCHEDULE]` | configure a data source: Confluence (address, user, space, pages; the API token typed hidden), website, schedule |
+| `wx-admin kb source browse <ds> [--space ID] [--url URL] [--folder ID]` | what a source can sync: Confluence spaces (or the pages of --space), website pages, Drive folders |
+| `wx-admin kb source sync <ds> [--full]` | start a sync of a data source (incremental; --full syncs everything again) |
+| `wx-admin kb source stop <ds>` | stop the sync of a data source |
+| `wx-admin kb source status <ds> [--watch] [--every SECONDS]` | the sync status of a data source; --watch follows it until the sync ends |
+| `wx-admin kb source logs <ds> [--level LEVEL] [--search TEXT] [--limit N]` | the sync logs of a data source |
+| `wx-admin kb source stats <ds>` | the documents and chunks of a data source |
+| `wx-admin kb source clone <ds>` | a copy of a data source (its configuration, not its documents) |
+| `wx-admin kb source clean <ds> --yes` | remove the documents of a data source (needs --yes; the source and its configuration stay) |
+| `wx-admin kb source delete <ds>... --yes` | delete data sources (needs --yes) |
 
 ### wx-admin pbx
 

@@ -44,7 +44,7 @@ export const ctxOf = (f, extra = {}) => {
 // Answers as the service does ({knowledgeBases}, {knowledgeBase}, {dataSources}, …).
 export function fakeKb(state) {
   let next = 1;
-  const id = (p) => `${p}-${next++}`;
+  const id = (p) => `${p}-new${next++}`; // never the id of an object of the state
   return (method, u, {body}) => {
     const p = u.pathname.replace(/^\/api\/v1/, '');
     const m = (re) => p.match(re);

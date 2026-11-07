@@ -3,11 +3,16 @@
 // source or a document is given by id or by exact name; a name several share asks for the id.
 // Operations (the knowledge base service, https://kb.wim[-stage].wildix.com/api/v1):
 //   ListKnowledgeBases, GetKnowledgeBase, CreateKnowledgeBase, UpdateKnowledgeBase, DeleteKnowledgeBase,
-//   SearchKnowledgeBase, GenerateSearchAnswer, ListSearchQueriesHistory, ListHistoryStatistics
+//   SearchKnowledgeBase, GenerateSearchAnswer, ListSearchQueriesHistory, ListHistoryStatistics;
+//   ListDataSources, GetDataSource, CreateDataSource, ConfigureDataSource, DescribeDataSource, StartSyncDataSource,
+//   StopSyncDataSource, GetDataSourceSyncStatus, ListDataSourceSynchronizationLogs, ListDataSourceStatistics,
+//   CloneDataSource, CleanDataSource, DeleteDataSource
 import {UsageError} from 'wldx-core/errors';
 import {apiPath} from 'wldx-core/http';
 import {localTime, oneLine, paint, table} from 'wldx-core/format';
+import {readSecret} from 'wldx-core/secret';
 import {cloudClient} from '../cloud/client.mjs';
+import {operationsOf} from '../cloud/specs.mjs';
 import {pickByName} from '../match.mjs';
 import {maskSecrets} from './trunk.mjs';
 
@@ -236,10 +241,338 @@ export const kbCommands = {
   },
 };
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Data sources
+
+const dsPath = (id) => `${V1}${apiPath`/data-sources/${id}`}`;
+const enumOf = (op, prop, fallback) => {
+  const p = operationsOf('kb').get(op)?.schema?.properties?.[prop];
+  return p?.enum ?? p?.allOf?.find((x) => x.enum)?.enum ?? fallback;
+};
+const SCHEDULES = enumOf('ConfigureDataSource', 'syncSchedule', [
+  'DISABLED',
+  'EVERY_SIX_HOURS',
+  'EVERY_TWELVE_HOURS',
+  'EVERY_DAY',
+  'EVERY_WEEK',
+]);
+const TYPES = ['confluence', 'website', 'files'];
+const LEVELS = ['debug', 'info', 'warn', 'error'];
+const RUNNING = /run|sync|progress|pend|queue|start/i;
+const sourceLine = (d) => `${d.name} (${d.id}) · ${d.type} · ${d.syncSchedule ?? ''}`;
+const whole = (v, name) => {
+  if (v === undefined) return undefined;
+  if (!/^\d+$/.test(String(v))) throw new UsageError(`--${name} is a whole number: ${v}`);
+  return Number(v);
+};
+const statusLine = (r) =>
+  `${r.status}${r.mode ? ` (${r.mode})` : ''} · ${
+    Object.entries(r.documentsStats ?? {})
+      .map(([k, n]) => `${n} ${k}`)
+      .join(', ') || 'no documents'
+  }${r.syncedAt ? ` · synced ${localTime(r.syncedAt)}` : ''}${r.error ? ` · ${r.error}` : ''}`;
+
+export const sourceCommands = {
+  list: {
+    summary: 'the data sources: type, schedule (keys masked)',
+    usage: 'wx-admin kb source list [--show-secrets]',
+    options: {...SHOW},
+    args: [0, 0],
+    async run(ctx) {
+      return masked(ctx, {dataSources: await listSources(await kbClient(ctx))});
+    },
+    text: (r) => (r.dataSources.length ? r.dataSources.map(sourceLine) : 'No data sources'),
+  },
+  get: {
+    summary: 'one data source with its configuration and sync status (keys masked)',
+    usage: 'wx-admin kb source get <ds> [--show-secrets]',
+    options: {...SHOW},
+    args: [1, 1],
+    async run(ctx) {
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      const full = (await client.call('GET', dsPath(d.id)))?.dataSource ?? d;
+      const syncStatus = await client.call('GET', `${dsPath(d.id)}/sync-status`);
+      return masked(ctx, {...full, syncStatus});
+    },
+    text: (r) => [
+      sourceLine(r),
+      `  sync: ${statusLine(r.syncStatus ?? {})}`,
+      ...JSON.stringify(r.config ?? {}, null, 2)
+        .split('\n')
+        .map((l) => `  ${l}`),
+    ],
+  },
+  create: {
+    summary: 'create a data source (then: kb source configure, kb source sync)',
+    usage: 'wx-admin kb source create <name> --type confluence|website|files [--description TEXT]',
+    details:
+      'Google Drive is connected with OAuth in a browser: connect it in the WIM console; wx-admin then lists, syncs and deletes it.',
+    options: {
+      type: {type: 'string', choices: [...TYPES, 'gdrive'], description: 'the kind of source'},
+      description: {type: 'string', placeholder: 'TEXT', description: 'the description'},
+    },
+    args: [1, 1],
+    async run(ctx) {
+      const type = ctx.values.type;
+      if (!type) throw new UsageError('--type is needed', ctx.usage());
+      if (type === 'gdrive')
+        throw new UsageError(
+          'Google Drive is connected with OAuth in a browser: connect it in the WIM console, then wx-admin kb source sync',
+        );
+      const body = {name: ctx.positionals[0], description: ctx.values.description ?? '', type};
+      return (await (await kbClient(ctx)).call('POST', `${V1}/data-sources`, {json: body}))?.dataSource ?? body;
+    },
+    text: (d) =>
+      `Created the data source ${d.name}${d.id ? ` (${d.id})` : ''}: next, wx-admin kb source configure ${d.id ?? d.name}`,
+  },
+  configure: {
+    summary:
+      'configure a data source: Confluence (address, user, space, pages; the API token typed hidden), website, schedule',
+    usage:
+      'wx-admin kb source configure <ds> [--url URL]... [--user EMAIL] [--space ID] [--page ID]... [--schedule SCHEDULE]',
+    details: [
+      'Confluence: --url (https://<site>.atlassian.net), --user, --space, --page (replaces the pages); the API token is',
+      'asked hidden (or read from stdin) when the source has none or --url or --user change. Website: --url (repeatable).',
+      `Schedule: ${SCHEDULES.join(', ')}.`,
+    ].join('\n'),
+    options: {
+      url: {
+        type: 'string',
+        multiple: true,
+        placeholder: 'URL',
+        description: 'the Confluence address, or the website(s)',
+      },
+      user: {type: 'string', placeholder: 'EMAIL', description: 'the Confluence user of the API token'},
+      space: {type: 'string', placeholder: 'ID', description: 'the Confluence space (kb source browse lists them)'},
+      page: {
+        type: 'string',
+        multiple: true,
+        placeholder: 'ID',
+        description: 'a Confluence or website page to sync (replaces them)',
+      },
+      schedule: {type: 'string', choices: SCHEDULES, description: 'how often it syncs'},
+    },
+    args: [1, 1],
+    async run(ctx) {
+      const v = ctx.values;
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      const full = (await client.call('GET', dsPath(d.id)))?.dataSource ?? d;
+      let config;
+      if (full.type === 'confluence') {
+        const c = {...(full.config?.confluence ?? {})};
+        const needKey = !c.apiKey || v.url !== undefined || v.user !== undefined;
+        if (v.url) c.baseUrl = v.url[0];
+        if (v.user !== undefined) c.username = v.user;
+        if (v.space !== undefined) c.spaceId = v.space;
+        if (v.page) c.pages = {enabled: v.page, disabled: c.pages?.disabled ?? []};
+        for (const k of ['baseUrl', 'username', 'spaceId'])
+          if (!c[k])
+            throw new UsageError(
+              `A Confluence source needs ${{baseUrl: '--url', username: '--user', spaceId: '--space'}[k]}`,
+              ctx.usage(),
+            );
+        if (needKey) {
+          c.apiKey = await readSecret(ctx, `Confluence API token of ${c.username}: `);
+          if (!c.apiKey) throw new UsageError('No API token given: nothing was changed');
+        }
+        config = {confluence: c};
+      } else if (full.type === 'website') {
+        const w = {...(full.config?.website ?? {})};
+        if (v.url) w.urls = v.url;
+        if (v.page) w.pages = {enabled: v.page};
+        if (!w.urls?.length) throw new UsageError('A website source needs --url', ctx.usage());
+        config = {website: w};
+      } else if (full.type === 'gdrive') {
+        config = {gdrive: full.config?.gdrive};
+      } else config = {files: {}};
+      const body = {
+        config,
+        ...(v.schedule ? {syncSchedule: v.schedule} : full.syncSchedule ? {syncSchedule: full.syncSchedule} : {}),
+      };
+      const r = await client.call('PUT', `${dsPath(d.id)}/configure`, {json: body});
+      return maskSecrets(r?.dataSource ?? {id: d.id, name: d.name, ...body});
+    },
+    text: (d) => `Configured the data source ${d.name} (${d.id})`,
+  },
+  browse: {
+    summary: 'what a source can sync: Confluence spaces (or the pages of --space), website pages, Drive folders',
+    usage: 'wx-admin kb source browse <ds> [--space ID] [--url URL] [--folder ID]',
+    options: {
+      space: {type: 'string', placeholder: 'ID', description: 'Confluence: the pages of this space'},
+      url: {type: 'string', placeholder: 'URL', description: 'website: discover from this address (default: its own)'},
+      folder: {
+        type: 'string',
+        placeholder: 'ID',
+        description: 'Google Drive: the folders under this one (default root)',
+      },
+    },
+    args: [1, 1],
+    async run(ctx) {
+      const v = ctx.values;
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      let parameters;
+      if (d.type === 'confluence') parameters = {confluence: v.space ? {pages: {spaceId: v.space}} : {spaces: {}}};
+      else if (d.type === 'website') {
+        const url = v.url ?? d.config?.website?.urls?.[0];
+        if (!url) throw new UsageError('Give the address: --url URL', ctx.usage());
+        parameters = {website: {discover: {url}}};
+      } else if (d.type === 'gdrive') parameters = {gdrive: {folders: {parentId: v.folder ?? 'root'}}};
+      else throw new UsageError(`A ${d.type} source has nothing to browse`);
+      return (await client.call('POST', `${dsPath(d.id)}/describe`, {json: {parameters}}))?.result ?? {};
+    },
+    text(r) {
+      const c = r.confluence;
+      if (c?.spaces) return c.spaces.map((s) => `${s.id}  ${s.key ?? ''}  ${s.name}  (${s.type})`);
+      if (c?.pages) return c.pages.map((p) => `${p.id}  ${p.title}${p.parentId ? `  (in ${p.parentId})` : ''}`);
+      if (r.website) return [...r.website.pages.map((p) => p.url), ...(r.website.truncated ? ['… (truncated)'] : [])];
+      if (r.gdrive) return r.gdrive.folders.map((f) => `${f.id}  ${f.name}`);
+      return JSON.stringify(r, null, 2);
+    },
+  },
+  sync: {
+    summary: 'start a sync of a data source (incremental; --full syncs everything again)',
+    usage: 'wx-admin kb source sync <ds> [--full]',
+    options: {full: {type: 'boolean', description: 'sync every document again, not only what changed'}},
+    args: [1, 1],
+    async run(ctx) {
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      await client.call('POST', `${dsPath(d.id)}/start-sync`, {
+        query: {syncType: ctx.values.full ? 'full' : 'incremental'},
+      });
+      return {id: d.id, name: d.name, sync: ctx.values.full ? 'full' : 'incremental', started: true};
+    },
+    text: (r) => `Started a ${r.sync} sync of ${r.name}: wx-admin kb source status ${r.id} --watch`,
+  },
+  stop: {
+    summary: 'stop the sync of a data source',
+    usage: 'wx-admin kb source stop <ds>',
+    options: {},
+    args: [1, 1],
+    async run(ctx) {
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      await client.call('POST', `${dsPath(d.id)}/stop-sync`);
+      return {id: d.id, name: d.name, stopped: true};
+    },
+    text: (r) => `Stopped the sync of ${r.name}`,
+  },
+  status: {
+    summary: 'the sync status of a data source; --watch follows it until the sync ends',
+    usage: 'wx-admin kb source status <ds> [--watch] [--every SECONDS]',
+    options: {
+      watch: {type: 'boolean', description: 'ask again until the sync is over'},
+      every: {type: 'string', placeholder: 'SECONDS', description: 'with --watch: how often (default 5)'},
+    },
+    args: [1, 1],
+    async run(ctx) {
+      const every = whole(ctx.values.every, 'every') ?? 5;
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      for (;;) {
+        const r = await client.call('GET', `${dsPath(d.id)}/sync-status`);
+        if (!ctx.values.watch || !RUNNING.test(String(r?.status ?? '')) || ctx.signal?.aborted)
+          return {name: d.name, ...r};
+        ctx.info(`${localTime(new Date(ctx.clock()).toISOString())}  ${statusLine(r)}`);
+        await new Promise((resolve) => {
+          const t = setTimeout(resolve, every * 1000);
+          ctx.signal?.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(t);
+              resolve();
+            },
+            {once: true},
+          );
+        });
+      }
+    },
+    text: (r) => `${r.name}: ${statusLine(r)}`,
+  },
+  logs: {
+    summary: 'the sync logs of a data source',
+    usage: 'wx-admin kb source logs <ds> [--level LEVEL] [--search TEXT] [--limit N]',
+    options: {
+      level: {type: 'string', choices: LEVELS, description: 'only this level'},
+      search: {type: 'string', placeholder: 'TEXT', description: 'only lines with this text'},
+      limit: {type: 'string', placeholder: 'N', description: 'at most N lines'},
+    },
+    args: [1, 1],
+    async run(ctx) {
+      const v = ctx.values;
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      return client.call('GET', `${dsPath(d.id)}/sync-logs`, {
+        query: {logLevel: v.level, search: v.search, limit: whole(v.limit, 'limit')},
+      });
+    },
+    text: (r) =>
+      (r?.logs ?? []).map((l) => `${localTime(l.timestamp)}  ${String(l.level).padEnd(5)}  ${oneLine(l.message, 200)}`),
+  },
+  stats: {
+    summary: 'the documents and chunks of a data source',
+    usage: 'wx-admin kb source stats <ds>',
+    options: {},
+    args: [1, 1],
+    async run(ctx) {
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      return {name: d.name, ...(await client.call('GET', `${dsPath(d.id)}/statistics`))};
+    },
+    text: (r) => `${r.name}: ${r.documentsCount} documents, ${r.chunksCount} chunks`,
+  },
+  clone: {
+    summary: 'a copy of a data source (its configuration, not its documents)',
+    usage: 'wx-admin kb source clone <ds>',
+    options: {},
+    args: [1, 1],
+    async run(ctx) {
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      return client.call('POST', `${dsPath(d.id)}/clone`);
+    },
+    text: (r) => `Cloned: the new data source is ${r.dataSourceId}`,
+  },
+  clean: {
+    summary: 'remove the documents of a data source (needs --yes; the source and its configuration stay)',
+    usage: 'wx-admin kb source clean <ds> --yes',
+    options: {yes: {type: 'boolean', description: 'yes, remove its documents'}},
+    args: [1, 1],
+    async run(ctx) {
+      if (!ctx.values.yes)
+        throw new UsageError('Cleaning removes every document of the source: confirm with --yes', ctx.usage());
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      await client.call('POST', `${dsPath(d.id)}/clean`);
+      return {id: d.id, name: d.name, cleaned: true};
+    },
+    text: (r) => `Cleaned ${r.name}`,
+  },
+  delete: {
+    summary: 'delete data sources (needs --yes)',
+    usage: 'wx-admin kb source delete <ds>... --yes',
+    options: {yes: {type: 'boolean', description: 'yes, delete them'}},
+    args: [1, 50],
+    async run(ctx) {
+      if (!ctx.values.yes)
+        throw new UsageError('Deleting a data source removes its documents: confirm with --yes', ctx.usage());
+      const client = await kbClient(ctx);
+      const found = [];
+      for (const ref of ctx.positionals) found.push(await findSource(client, ref));
+      for (const d of found) await client.call('DELETE', dsPath(d.id));
+      return {deleted: found.map(({id, name}) => ({id, name}))};
+    },
+    text: (r) => `Deleted ${r.deleted.map((d) => `${d.name} (${d.id})`).join(', ')}`,
+  },
+};
+
 export const groups = {
   kb: {
     summary: 'the knowledge base of the cloud (WIM): knowledge bases, data sources, documents, search, answers',
-    commands: kbCommands,
+    commands: {...kbCommands, source: {summary: 'the data sources of the knowledge bases', commands: sourceCommands}},
   },
 };
 
