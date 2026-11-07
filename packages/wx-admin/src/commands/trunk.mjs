@@ -18,7 +18,7 @@ import {readForUpload, refuseUnsafeWrite} from 'wldx-core/files';
 import {oneLine, paint, table} from 'wldx-core/format';
 import {apiPath} from 'wldx-core/http';
 import {pbxClient} from '../pbx.mjs';
-import {readSecret} from '../secret.mjs';
+import {readSecret} from 'wldx-core/secret';
 import {findRecord, readJsonInput, wholeNumber} from './routing.mjs';
 
 const SCOPE = {scope: 'trunks'};

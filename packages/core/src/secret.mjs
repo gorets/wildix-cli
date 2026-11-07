@@ -1,6 +1,6 @@
 // Reads a secret (an API key, a token, a password) without echo: hidden typing in a terminal, else the first line
 // of stdin (`… | wx-admin pbx add …`). Never from a command line, where other processes can read it.
-import {UsageError} from 'wldx-core/errors';
+import {UsageError} from './errors.mjs';
 
 export async function readSecret(ctx, prompt) {
   const input = ctx.stdin;

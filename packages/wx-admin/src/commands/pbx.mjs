@@ -18,7 +18,7 @@ import {
   savedPbxs,
   setDefaultPbx,
 } from '../pbx.mjs';
-import {readSecret} from '../secret.mjs';
+import {readSecret} from 'wldx-core/secret';
 
 const KINDS = {
   apikey: 'a Company API Key (wsk-v1-…), the access Wildix recommends',

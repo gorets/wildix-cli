@@ -15,7 +15,7 @@ import {UsageError} from 'wldx-core/errors';
 import {localTime, oneLine, paint, table} from 'wldx-core/format';
 import {apiPath} from 'wldx-core/http';
 import {pbxClient} from '../pbx.mjs';
-import {readSecret} from '../secret.mjs';
+import {readSecret} from 'wldx-core/secret';
 
 // The features PUT /PBX/settings/ takes (one per request).
 export const FEATURES = [
