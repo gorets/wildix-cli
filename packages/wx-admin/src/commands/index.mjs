@@ -1,6 +1,6 @@
 // The commands of wx-admin. GROUPS: `wx-admin <group> <command>`; COMMANDS: single commands, `wx-admin <command>`.
-// What a group and a command are: wldx-core/registry. login, logout, status and profile come from the core, shared
-// with wx. PBX commands do not set `auth`: they choose their access themselves (src/pbx.mjs). `complete: 'pbxs'`
+// What a group and a command are: wldx-core/registry. No x-bees login here (SPEC.profiles is false): commands choose
+// their PBX access themselves (src/pbx.mjs). `complete: 'pbxs'`
 // offers the PBX with saved access. `readOnly: true` on a command that only reads lets it run with --all-pbx
 // (READ_ONLY below sets it).
 import {commands as api} from './api.mjs';
@@ -10,15 +10,12 @@ import {groups as config} from './config.mjs';
 import {groups as device} from './device.mjs';
 import {groups as dialplan} from './dialplan.mjs';
 import {groups as kb} from './kb.mjs';
-import {login, logout} from 'wldx-core/commands/login';
 import {groups as pbx} from './pbx.mjs';
 import {groups as phonebook} from './phonebook.mjs';
-import {groups as profile} from 'wldx-core/commands/profile';
 import {groups as queue} from './queue.mjs';
 import {groups as records} from './records.mjs';
 import {dialplanCommands, groups as routing} from './routing.mjs';
 import {groups as sound} from './sound.mjs';
-import status from 'wldx-core/commands/status';
 import {groups as system} from './system.mjs';
 import {groups as trunk} from './trunk.mjs';
 import {groups as user} from './user.mjs';
@@ -43,10 +40,9 @@ export const GROUPS = {
   ...config,
   ...kb,
   ...pbx,
-  ...profile,
 };
 
-export const COMMANDS = {...api, ...cloud, login, logout, status};
+export const COMMANDS = {...api, ...cloud};
 
 // The commands that only read the PBX (no change there, no file written): they may run with --all-pbx.
 const READ_ONLY = {
@@ -75,7 +71,7 @@ for (const [group, names] of Object.entries(READ_ONLY)) {
   }
 }
 
-// Its global options, taken anywhere like those of the core (--profile, --output, --pretty, --no-color).
+// Its global options, taken anywhere like those of the core (--output, --pretty, --no-color).
 export const GLOBAL_OPTIONS = {
   pbx: {
     type: 'string',

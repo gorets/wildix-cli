@@ -8,7 +8,7 @@ import {UsageError} from 'wldx-core/errors';
 import {clean} from 'wldx-core/format';
 import {readSecret} from 'wldx-core/secret';
 import {select} from 'wldx-core/select';
-import {readSerial} from '../pbx.mjs';
+import {accessLabel, readSerial} from '../pbx.mjs';
 import {applyPlan} from './apply.mjs';
 import {TRANSFER_KINDS, readKinds} from './kinds.mjs';
 import {openLog} from './log.mjs';
@@ -210,9 +210,7 @@ export async function runImport(ctx, {portable, from, client, values, rerun}) {
   const results = [];
   try {
     log.line(`wx-admin config import${values['dry-run'] ? ' (DRY RUN: nothing is written)' : ''}`);
-    log.line(
-      `from ${from} to ${host}; access: ${client.target.auth ?? 'x-bees login'}${ctx.profile ? ` (${ctx.profile})` : ''}`,
-    );
+    log.line(`from ${from} to ${host}; access: ${accessLabel(client.target)}`);
     log.line(
       `plan: ${Object.entries(plan.counts)
         .map(([k, n]) => `${n} ${k}`)

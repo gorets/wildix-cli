@@ -2,33 +2,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
-import {saveTokens, stamp, tokenFile} from 'wldx-core/auth';
 import {complete} from '../src/cli.mjs';
 import {normalizeHost, savedAccess} from '../src/pbx.mjs';
-import {fakeFetch, fakeJwt, run, tempConfigDir} from './helpers.mjs';
+import {fakeFetch, run, tempConfigDir} from './helpers.mjs';
 
 const NOW = Date.UTC(2026, 10, 7, 12);
 const KEY = `wsk-v1-${'a'.repeat(93)}`;
 const ok = (result) => ({body: {type: 'result', result}});
 
-function home({login = false} = {}) {
-  const env = {WILDIX_CONFIG_DIR: tempConfigDir()};
-  if (login) {
-    const email = 'admin@example.com';
-    saveTokens(tokenFile(email, env), {
-      IdToken: fakeJwt({
-        email,
-        exp: NOW / 1000 + 3600,
-        'custom:pbx_domain': 'own.wildixin.com',
-        'custom:pbx_port': '443',
-      }),
-      RefreshToken: 'r',
-      ExpiresIn: 3600,
-      email,
-      savedAt: stamp(NOW),
-    });
-  }
-  return env;
+function home() {
+  return {WILDIX_CONFIG_DIR: tempConfigDir()};
 }
 const add = (env, argv, secret, fetch = fakeFetch(ok({records: []}))) =>
   run(['pbx', 'add', ...argv], {env, fetch, stdin: `${secret}\n`, now: () => NOW});
@@ -84,26 +67,34 @@ test('a refused new access gives back the access saved before', async () => {
   assert.equal(savedAccess('demo.wildixin.com', env).token, 'tok-1');
 });
 
-test('several PBX: --pbx anywhere, the default one, and the PBX of the x-bees login', async () => {
-  const env = home({login: true});
-  await add(env, ['one', '--token'], 'tok-1');
-  await add(env, ['two', '--basic'], 'pw-2');
+test('several PBX: the only saved one, --pbx anywhere, the default one; several without a default exit 2', async () => {
+  const env = home();
   const urlOf = async (argv) => {
     const fetch = fakeFetch(ok({records: []}));
-    await run(argv, {env, fetch, now: () => NOW});
-    return [fetch.calls[0]?.url, fetch.calls[0]?.headers.authorization.split(' ')[0]];
+    const r = await run(argv, {env, fetch, now: () => NOW});
+    return [fetch.calls[0]?.url, fetch.calls[0]?.headers.authorization.split(' ')[0], r.code];
   };
-  assert.deepEqual(await urlOf(['dialplan', 'list']), ['https://own.wildixin.com/api/v1/PBX/Dialplans/', 'Bearer']);
+  await add(env, ['one', '--token'], 'tok-1');
+  assert.deepEqual(await urlOf(['dialplan', 'list']), ['https://one.wildixin.com/api/v1/PBX/Dialplans/', 'Bearer', 0]);
+  await add(env, ['two', '--basic'], 'pw-2');
+  const several = await run(['dialplan', 'list'], {env, fetch: fakeFetch()});
+  assert.equal(several.code, 2);
+  assert.match(
+    several.stderr,
+    /Several PBX are saved and none is the default: give --pbx or run wx-admin pbx use <host>/,
+  );
   assert.deepEqual(await urlOf(['dialplan', 'list', '--pbx', 'two']), [
     'https://two.wildixin.com/api/v1/PBX/Dialplans/',
     'Basic',
+    0,
   ]);
   assert.equal((await run(['pbx', 'use', 'one'], {env})).code, 0);
   assert.deepEqual(await urlOf(['--pbx=two.wildixin.com', 'dialplan', 'list']), [
     'https://two.wildixin.com/api/v1/PBX/Dialplans/',
     'Basic',
+    0,
   ]);
-  assert.deepEqual(await urlOf(['dialplan', 'list']), ['https://one.wildixin.com/api/v1/PBX/Dialplans/', 'Bearer']);
+  assert.deepEqual(await urlOf(['dialplan', 'list']), ['https://one.wildixin.com/api/v1/PBX/Dialplans/', 'Bearer', 0]);
   const list = JSON.parse((await run(['pbx', 'list'], {env})).stdout);
   assert.deepEqual(
     list.pbxs.map((p) => [p.host, p.auth, p.default]),
@@ -112,17 +103,24 @@ test('several PBX: --pbx anywhere, the default one, and the PBX of the x-bees lo
       ['two.wildixin.com', 'password', false],
     ],
   );
-  assert.equal(list.login.host, 'own.wildixin.com');
-  assert.equal((await run(['pbx', 'use', '--login'], {env})).code, 0);
-  assert.deepEqual(await urlOf(['dialplan', 'list']), ['https://own.wildixin.com/api/v1/PBX/Dialplans/', 'Bearer']);
+  assert.equal(list.login, undefined);
+  assert.equal((await run(['pbx', 'use', '--login'], {env})).code, 64);
   assert.equal((await run(['pbx', 'remove', 'two'], {env})).code, 0);
   assert.equal((await run(['dialplan', 'list', '--pbx', 'two'], {env, fetch: fakeFetch()})).code, 2);
   assert.deepEqual(complete(['--pbx', ''], env), ['one.wildixin.com\ttoken']);
   assert.deepEqual(complete(['pbx', 'use', 'o'], env), ['one.wildixin.com\ttoken']);
 });
 
+test('wx-admin has no x-bees login: no profile command, no --profile', async () => {
+  const env = home();
+  assert.equal((await run(['profile', 'list'], {env})).code, 64);
+  assert.equal((await run(['pbx', 'list', '--profile', 'a@b.c'], {env})).code, 64);
+  const help = await run([], {env, output: 'text'});
+  assert.doesNotMatch(help.stdout, /--profile|x-bees login|e-mail/);
+});
+
 test('WILDIX_PBX_API_KEY goes only to WILDIX_PBX_HOST: never to another --pbx, never with --all-pbx', async () => {
-  const env = {...home({login: true}), WILDIX_PBX_API_KEY: KEY, WILDIX_PBX_HOST: 'ci'};
+  const env = {...home(), WILDIX_PBX_API_KEY: KEY, WILDIX_PBX_HOST: 'ci'};
   let fetch = fakeFetch(ok({records: []}));
   assert.equal((await run(['dialplan', 'list'], {env, fetch})).code, 0);
   assert.equal(fetch.calls[0].url, 'https://ci.wildixin.com/api/v1/PBX/Dialplans/');
@@ -163,10 +161,10 @@ test('a refusal says what to do, by the kind of access and the scope of the rout
   assert.ok(!r401.stderr.includes(KEY));
 });
 
-test('no PBX at all: a hint to add one or to log in', async () => {
+test('no PBX at all: a hint to sign in to one', async () => {
   const r = await run(['dialplan', 'list'], {env: home(), fetch: fakeFetch()});
   assert.equal(r.code, 2);
-  assert.match(r.stderr, /wx-admin pbx add <host>.*wx-admin login/s);
+  assert.match(r.stderr, /No PBX chosen: wx-admin login <host>/);
 });
 
 test('wx-admin api: GET reads; other methods need --yes; the path stays under /api/v1', async () => {
@@ -189,7 +187,7 @@ test('wx-admin api: GET reads; other methods need --yes; the path stays under /a
 });
 
 test('--all-pbx: a command that reads runs on every PBX; one that fails does not stop the others; writes are refused', async () => {
-  const env = home({login: true});
+  const env = home();
   await add(env, ['one', '--token'], 'tok-1');
   await add(env, ['two', '--token'], 'tok-2');
   const fetch = async (url) => {
@@ -208,7 +206,6 @@ test('--all-pbx: a command that reads runs on every PBX; one that fails does not
     [
       ['one.wildixin.com', true, false],
       ['two.wildixin.com', false, true],
-      ['own.wildixin.com', true, false],
     ],
   );
   const text = await run(['dialplan', 'list', '--all-pbx', '--no-color'], {env, fetch, now: () => NOW, output: 'text'});
@@ -218,20 +215,8 @@ test('--all-pbx: a command that reads runs on every PBX; one that fails does not
   assert.equal((await run(['--all-pbx', '--pbx', 'one', 'dialplan', 'list'], {env, fetch})).code, 64);
 });
 
-test('--pbx by serial: bare or as <serial>.wildixin.com, for saved access (recorded by pbx add) and the x-bees login', async () => {
-  const env = home({login: true});
-  const tokenFile = (await import('wldx-core/auth')).tokenFile;
-  const set = JSON.parse(fs.readFileSync(tokenFile('admin@example.com', env), 'utf8'));
-  const {saveTokens} = await import('wldx-core/auth');
-  saveTokens(tokenFile('admin@example.com', env), {
-    ...set,
-    IdToken: fakeJwt({
-      email: 'admin@example.com',
-      exp: NOW / 1000 + 3600,
-      'custom:pbx_domain': 'own.wildixin.com',
-      'custom:pbx_serial': '2211000000aa',
-    }),
-  });
+test('--pbx by serial: bare or as <serial>.wildixin.com, for saved access (recorded by pbx add)', async () => {
+  const env = home();
   // pbx add reads the serial from the settings of the PBX
   const fetch = fakeFetch(ok({records: []}), ok({pbxSerial: '2211000000EF'}));
   const added = await add(env, ['one', '--token'], 'tok-1', fetch);
@@ -243,6 +228,5 @@ test('--pbx by serial: bare or as <serial>.wildixin.com, for saved access (recor
   };
   assert.equal(await urlOf('2211000000ef'), 'https://one.wildixin.com/api/v1/PBX/Dialplans/');
   assert.equal(await urlOf('2211000000EF.wildixin.com'), 'https://one.wildixin.com/api/v1/PBX/Dialplans/');
-  assert.equal(await urlOf('2211000000aa'), 'https://own.wildixin.com/api/v1/PBX/Dialplans/');
   assert.deepEqual(complete(['--pbx', '2211'], env), ['2211000000ef\tone.wildixin.com']);
 });

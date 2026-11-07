@@ -7,12 +7,12 @@ import {clean, paint} from 'wldx-core/format';
 import {program, setProgram} from 'wldx-core/program';
 import {COMMANDS, GLOBAL_OPTIONS, GROUPS} from './commands/index.mjs';
 import {SERVICES} from './cloud/env.mjs';
-import {loginPbxOf, savedPbxs} from './pbx.mjs';
+import {savedPbxs} from './pbx.mjs';
 import {VERSION} from './version.mjs';
 
 setProgram({name: 'wx-admin', pkg: 'wldx-admin-cli', version: VERSION});
 
-// --all-pbx: a command that only reads runs once per PBX (saved access, then the PBX of the x-bees login) and every
+// --all-pbx: a command that only reads runs once per PBX with saved access and every
 // result is printed under its PBX; a PBX that fails does not stop the others. JSON: {results: [{pbx, result} |
 // {pbx, error}]}. Exit 1 when one failed.
 async function runOnAllPbx(cmd, ctx, io) {
@@ -25,10 +25,7 @@ async function runOnAllPbx(cmd, ctx, io) {
   if (io.env.WILDIX_PBX_API_KEY)
     throw new UsageError('--all-pbx is refused while WILDIX_PBX_API_KEY is set: that key is for one PBX only');
   const hosts = savedPbxs(io.env).map((p) => p.host);
-  const login = loginPbxOf(ctx);
-  if (login && !hosts.includes(login.host)) hosts.push(login.host);
-  if (!hosts.length)
-    throw new AuthError(`No PBX: add one (${program.name} pbx add <host>) or log in (${program.name} login <e-mail>)`);
+  if (!hosts.length) throw new AuthError(`No PBX: sign in to one (${program.name} login <host>)`);
   const results = [];
   for (const pbx of hosts) {
     try {
@@ -50,14 +47,15 @@ async function runOnAllPbx(cmd, ctx, io) {
 }
 
 export const SPEC = {
+  profiles: false, // PBX access only: no x-bees login, no --profile
   groups: GROUPS,
   commands: COMMANDS,
   globals: GLOBAL_OPTIONS,
   help: {
     options: [
       '  --pbx PBX           the PBX: name.wildixin.com, name, an IP, or the serial of a known PBX; else the',
-      '                      default one (wx-admin pbx use), else the PBX of the x-bees login',
-      "  --all-pbx           run a command that reads on every PBX: saved access, then the x-bees login's",
+      '                      default one (wx-admin pbx use), else the only one signed in to',
+      '  --all-pbx           run a command that reads on every PBX signed in to',
       "  --env ENV           the environment of the cloud services: prod, stable or stage (default: the PBX's)",
     ],
     exitCodes: 'Exit codes: 0 done, 1 error, 2 not logged in or the access was refused, 64 wrong usage.',

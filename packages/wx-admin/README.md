@@ -436,19 +436,10 @@ The PBX to work on: saved access (API key, token, user), the default one, a chec
 | Command | What it does |
 | --- | --- |
 | `wx-admin pbx add <host> (--api-key \| --token \| --basic [--user NAME]) [--port N] [--no-check]` | save access to a PBX; the secret is typed hidden or read from stdin, never an argument |
-| `wx-admin pbx list` | the PBX with saved access and the PBX of the x-bees login; * marks the default one |
-| `wx-admin pbx use (<host> \| --login)` | make a PBX with saved access the default one; --login goes back to the PBX of the x-bees login |
+| `wx-admin pbx list` | the PBX with saved access; * marks the default one |
+| `wx-admin pbx use <host>` | make a PBX with saved access the default one (commands without --pbx go there) |
 | `wx-admin pbx remove <host>` | forget the saved access to a PBX (on this computer only) |
 | `wx-admin pbx check` | which PBX a command would use, and whether it accepts the access (one read) |
-
-### wx-admin profile
-
-Your profiles (the e-mails you are logged in with) and the default one.
-
-| Command | What it does |
-| --- | --- |
-| `wx-admin profile list` | your profiles; * marks the default one |
-| `wx-admin profile use <e-mail>` | make a profile the default one (used when no --profile is given) |
 
 ### wx-admin api
 
@@ -461,9 +452,6 @@ Your profiles (the e-mails you are logged in with) and the default one.
 | Command | What it does |
 | --- | --- |
 | `wx-admin cloud [<service> [<operation>]] [--param NAME=VALUE]... [--data JSON \| --data-file FILE\|-] [--yes] [--show-secrets]` | any operation of the cloud services (knowledge base, voicebots, WIM tools, Wilma) with the token of the PBX |
-| `wx-admin login [<e-mail>] [--send-code \| --code CODE]` | log in with a one-time code sent to your e-mail |
-| `wx-admin logout [--profile EMAIL] [--everywhere]` | log out: revoke the session of this device, or of every device |
-| `wx-admin status [--profile EMAIL] [--check]` | who you are logged in as, until when, and the version of wx-admin |
 | `wx-admin completion [bash\|zsh\|fish]` | the shell completion script (default: the shell of `$SHELL`) |
 <!-- commands:end -->
 

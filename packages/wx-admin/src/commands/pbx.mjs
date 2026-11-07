@@ -1,18 +1,15 @@
 // wx-admin pbx: the PBX the commands work on and the access saved for them.
-import {savedSession, sessions} from 'wldx-core/auth';
 import {UsageError} from 'wldx-core/errors';
-import {paint, table} from 'wldx-core/format';
+import {table} from 'wldx-core/format';
 import {
+  accessLabel,
   API_KEY,
   checkPort,
-  loginPbx,
-  loginPbxOf,
   normalizeHost,
   pbxClient,
   pbxHostOf,
   readSerial,
   removeAccess,
-  resolvePbx,
   saveAccess,
   savedAccess,
   savedPbxs,
@@ -25,13 +22,6 @@ const KINDS = {
   token: 'a Simple Token (deprecated by Wildix: no new ones can be made)',
   basic: 'a user and password (Basic; the PBX accepts it only with ALLOW_BASIC_AUTH=true)',
 };
-
-// The PBX of the x-bees login of the profile, if any (no network).
-function loginTarget(ctx) {
-  const email = ctx.profile ?? sessions(ctx.env)[0]?.email;
-  const set = email ? savedSession(email, ctx.env) : undefined;
-  return set ? loginPbx(set.IdToken) : undefined;
-}
 
 export const groups = {
   pbx: {
@@ -99,59 +89,40 @@ export const groups = {
           `Saved access to ${r.host}${r.serial ? ` (serial ${r.serial})` : ''} (${r.auth})${r.checked ? ', checked' : ''}. Use it with --pbx ${r.host}, or make it the default: wx-admin pbx use ${r.host}`,
       },
       list: {
-        summary: 'the PBX with saved access and the PBX of the x-bees login; * marks the default one',
+        summary: 'the PBX with saved access; * marks the default one',
         usage: 'wx-admin pbx list',
         options: {},
         args: [0, 0],
         run(ctx) {
           const saved = savedPbxs(ctx.env);
-          const login = loginTarget(ctx);
           return {
             pbxs: saved,
-            login: login ?? null,
-            default: saved.find((p) => p.default)?.host ?? (login ? `login:${login.host}` : null),
+            default: saved.find((p) => p.default)?.host ?? (saved.length === 1 ? saved[0].host : null),
           };
         },
-        text(r, ctx) {
-          const c = paint(ctx);
+        text(r) {
           const rows = r.pbxs.map((p) => [
-            p.default ? '*' : ' ',
+            p.host === r.default ? '*' : ' ',
             p.host + (p.port !== 443 ? `:${p.port}` : ''),
             p.serial ?? '',
-            p.auth,
+            accessLabel(p),
           ]);
-          if (r.login)
-            rows.push([
-              r.pbxs.some((p) => p.default) ? ' ' : '*',
-              r.login.host,
-              r.login.serial ?? '',
-              c.dim('the x-bees login'),
-            ]);
-          return rows.length
-            ? table(rows)
-            : 'No PBX: add one (wx-admin pbx add <host>) or log in (wx-admin login <e-mail>)';
+          return rows.length ? table(rows) : 'No PBX: wx-admin login <host>';
         },
       },
       use: {
-        summary: 'make a PBX with saved access the default one; --login goes back to the PBX of the x-bees login',
-        usage: 'wx-admin pbx use (<host> | --login)',
-        options: {login: {type: 'boolean', description: 'no default PBX: the PBX of the x-bees login'}},
-        args: [0, 1],
+        summary: 'make a PBX with saved access the default one (commands without --pbx go there)',
+        usage: 'wx-admin pbx use <host>',
+        options: {},
+        args: [1, 1],
         complete: 'pbxs',
         run(ctx) {
-          if (ctx.values.login) {
-            if (ctx.positionals.length) throw new UsageError('Give a host or --login, not both', ctx.usage());
-            setDefaultPbx(undefined, ctx.env);
-            return {defaultPbx: null};
-          }
-          if (!ctx.positionals.length) throw new UsageError('Give a host or --login', ctx.usage());
           const host = pbxHostOf(ctx.positionals[0], ctx);
-          if (!savedAccess(host, ctx.env))
-            throw new UsageError(`No access saved for ${host}: wx-admin pbx add ${host}`);
+          if (!savedAccess(host, ctx.env)) throw new UsageError(`Not signed in to ${host}: wx-admin login ${host}`);
           setDefaultPbx(host, ctx.env);
           return {defaultPbx: host};
         },
-        text: (r) => (r.defaultPbx ? `Default PBX: ${r.defaultPbx}` : 'Default PBX: the one of the x-bees login'),
+        text: (r) => `Default PBX: ${r.defaultPbx}`,
       },
       remove: {
         summary: 'forget the saved access to a PBX (on this computer only)',
@@ -173,21 +144,29 @@ export const groups = {
         options: {},
         args: [0, 0],
         async run(ctx) {
-          const target = await resolvePbx(ctx);
           const client = await pbxClient(ctx);
+          const {target} = client;
           await client.call('GET', '/Dictionaries');
+          // Read after the call: a password access may have moved between Basic and the WMS sign-in.
+          const saved = target.fromEnvironment ? undefined : savedAccess(target.host, ctx.env);
           // A saved access without its serial (added before wx-admin kept it) gets it now: --pbx can then use it.
-          const saved =
-            target.auth !== 'login' && !target.fromEnvironment ? savedAccess(target.host, ctx.env) : undefined;
-          let serial = saved?.serial ?? (target.auth === 'login' ? loginPbxOf(ctx)?.serial : null) ?? null;
+          let serial = saved?.serial ?? null;
           if (saved && !saved.serial) {
             serial = await readSerial(client);
             if (serial) saveAccess({...saved, serial}, ctx.env);
           }
-          return {host: target.host, port: target.port, serial, auth: target.auth, by: target.by, accepted: true};
+          return {
+            host: target.host,
+            port: target.port,
+            serial,
+            auth: target.auth,
+            ...(saved?.auth === 'password' ? {mode: saved.mode, user: saved.username} : {}),
+            by: target.by,
+            accepted: true,
+          };
         },
         text: (r) =>
-          `${r.host}${r.serial ? ` (serial ${r.serial})` : ''}: the access (${r.auth === 'login' ? 'x-bees login' : r.auth}) is accepted · ${{option: 'chosen with --pbx', default: 'the default PBX', login: 'the PBX of the x-bees login', environment: 'WILDIX_PBX_API_KEY for WILDIX_PBX_HOST'}[r.by]}`,
+          `${r.host}${r.serial ? ` (serial ${r.serial})` : ''}: the access (${accessLabel(r)}) is accepted · ${{option: 'chosen with --pbx', default: 'the default PBX', only: 'the only PBX signed in to', environment: 'WILDIX_PBX_API_KEY for WILDIX_PBX_HOST'}[r.by]}`,
       },
     },
   },

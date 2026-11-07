@@ -1,5 +1,5 @@
 // wx-admin api: any operation of the PBX REST API (https://<pbx>/api/v1, the OpenAPI at /api/v1/doc/), for what has no
-// command yet. The access and the PBX are chosen as for every command (--pbx, the default PBX, the x-bees login).
+// command yet. The access and the PBX are chosen as for every command (--pbx, the default PBX, the only one).
 import {UsageError} from 'wldx-core/errors';
 import {readJsonInput} from 'wldx-core/files';
 import {pbxClient} from '../pbx.mjs';

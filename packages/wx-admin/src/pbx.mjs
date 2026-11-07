@@ -1,9 +1,10 @@
-// The PBX a command works on, and how it signs in there. Two kinds of access:
-//   - the x-bees login (wx-admin login, shared with wx and the wildix-auth skill): the user's own PBX, named in the
-//     login token, with the rights of that user (their ACL);
-//   - access saved for a PBX (wx-admin pbx add): a Company API Key (wsk-v1-…, recommended by Wildix), a Simple Token
-//     (deprecated by Wildix) or Basic (user and password; disabled on a PBX unless ALLOW_BASIC_AUTH=true).
-// Which PBX: --pbx HOST, else the default PBX (wx-admin pbx use), else the PBX of the x-bees login.
+// The PBX a command works on, and how it signs in there (wx-admin login, or pbx add):
+//   - a Company API Key (wsk-v1-…, recommended by Wildix);
+//   - a login and password (`password`): Basic when the PBX takes it (ALLOW_BASIC_AUTH=true), else the WMS token
+//     sign-in with its second factor (src/wms-login.mjs); the password is kept so that wx-admin moves between the two
+//     and signs in again by itself;
+//   - a Simple Token (deprecated by Wildix).
+// Which PBX: --pbx HOST, else the default PBX (wx-admin pbx use), else the only saved one.
 // WILDIX_PBX_API_KEY with WILDIX_PBX_HOST gives a Company API Key for that one PBX without saving it (CI, scripts):
 // the key is sent to WILDIX_PBX_HOST only, never to a --pbx of the command line (which an agent may have built from
 // fetched text), and --all-pbx is refused while it is set.
@@ -17,7 +18,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import {configDir, getToken, jwtClaims, pickProfile, savedSession} from 'wldx-core/auth';
+import {configDir, jwtClaims} from 'wldx-core/auth';
 import {AuthError, UsageError} from 'wldx-core/errors';
 import {userAgent} from 'wldx-core/program';
 import {readSecret} from 'wldx-core/secret';
@@ -48,8 +49,7 @@ export function checkPort(port) {
   return n;
 }
 
-// A PBX as --pbx (or a command argument) names it: the serial of a known PBX (saved access, or the PBX of the x-bees
-// login), bare or as <serial>.wildixin.com, else a host as normalizeHost takes it. A serial is 8 to 16 hex digits;
+// A PBX as --pbx (or a command argument) names it: the serial of a PBX with saved access, bare or as <serial>.wildixin.com, else a host as normalizeHost takes it. A serial is 8 to 16 hex digits;
 // it is looked up first, as a bare name would otherwise be read as <name>.wildixin.com. An unknown serial stays
 // <serial>.wildixin.com (DNS may not know it: pbx add and pbx check record the serial of a PBX for --pbx).
 export function pbxHostOf(ref, ctx = {}) {
@@ -62,8 +62,6 @@ export function pbxHostOf(ref, ctx = {}) {
   if (/^[0-9a-f]{8,16}$/.test(s)) {
     const saved = savedPbxs(ctx.env ?? process.env).find((p) => p.serial && p.serial.toLowerCase() === s);
     if (saved) return saved.host;
-    const login = loginPbxOf({env: ctx.env ?? process.env, profile: ctx.profile});
-    if (login?.serial && login.serial.toLowerCase() === s) return login.host;
   }
   return normalizeHost(ref);
 }
@@ -159,34 +157,10 @@ export function setDefaultPbx(host, env = process.env) {
   writePrivate(settingsFile(env), s);
 }
 
-// The PBX of the x-bees login of the profile, from the saved session (no network), or undefined.
-export function loginPbxOf(ctx) {
-  try {
-    const email = pickProfile(ctx.env, ctx.profile);
-    const set = savedSession(email, ctx.env);
-    return set ? loginPbx(set.IdToken) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-// The PBX of the x-bees login and its port, from the claims of the token.
-export function loginPbx(token) {
-  const c = jwtClaims(token);
-  const host = c['custom:pbx_domain'];
-  if (!host) return undefined;
-  return {
-    host: String(host).toLowerCase(),
-    port: c['custom:pbx_port'] ? Number(c['custom:pbx_port']) : 443,
-    serial: c['custom:pbx_serial'] ? String(c['custom:pbx_serial']) : null,
-  };
-}
-
-// Which PBX and how: {host, port, auth: 'login'|'apikey'|'token'|'basic', header: () => Promise<string>, by}.
+// Which PBX and how: {host, port, auth: 'apikey'|'token'|'password', mode?, by, header(), onUnauthorized?()}.
+// by: 'option' (--pbx), 'default', 'only' (the only saved PBX), 'environment' (WILDIX_PBX_API_KEY).
 export async function resolvePbx(ctx) {
   const {env} = ctx;
-  const wanted = ctx.pbx ? pbxHostOf(ctx.pbx, ctx) : defaultPbx(env);
-  const by = ctx.pbx ? 'option' : wanted ? 'default' : 'login';
   if (env.WILDIX_PBX_API_KEY) {
     const key = env.WILDIX_PBX_API_KEY.trim();
     if (!API_KEY.test(key))
@@ -201,37 +175,32 @@ export async function resolvePbx(ctx) {
     const port = env.WILDIX_PBX_PORT ? checkPort(env.WILDIX_PBX_PORT) : 443;
     return {host, port, auth: 'apikey', by: 'environment', fromEnvironment: true, header: async () => `Bearer ${key}`};
   }
-  if (wanted) {
-    const a = savedAccess(wanted, env);
-    if (a) return targetOf(ctx, a, by);
-  }
-  // The x-bees login: its own PBX only.
-  let token;
-  try {
-    token = await (ctx.freshToken ? ctx.freshToken() : getToken({profile: ctx.profile, env, fetchImpl: ctx.fetch}));
-  } catch (e) {
-    if (e instanceof AuthError && !wanted) {
-      throw new AuthError(
-        `No PBX to work on: add access to one (wx-admin pbx add <host>), or log in with an x-bees admin account (wx-admin login <e-mail>). ${e.message}`,
-      );
-    }
-    throw e;
-  }
-  const own = loginPbx(token);
-  if (!own)
-    throw new AuthError('This x-bees login is not linked to a PBX: add access to a PBX with wx-admin pbx add <host>');
-  if (wanted && wanted !== own.host) {
-    const serial = /^([0-9a-f]{8,16})\.wildixin\.com$/.exec(wanted)?.[1];
+  if (ctx.pbx) {
+    const host = pbxHostOf(ctx.pbx, ctx);
+    const a = savedAccess(host, env);
+    if (a) return targetOf(ctx, a, 'option');
+    const serial = /^([0-9a-f]{8,16})\.wildixin\.com$/.exec(host)?.[1];
     if (serial)
       throw new AuthError(
-        `No known PBX has the serial ${serial}: add the PBX by its name (wx-admin pbx add <name>), which records its serial`,
+        `No known PBX has the serial ${serial}: sign in to the PBX by its name (wx-admin login <name>), which records its serial`,
       );
-    throw new AuthError(
-      `No access saved for ${wanted}, and the x-bees login belongs to ${own.host}. Add it: wx-admin pbx add ${wanted}`,
-    );
+    throw new AuthError(`Not signed in to ${host}: wx-admin login ${host}`);
   }
-  return {...own, auth: 'login', by, header: async () => `Bearer ${await (ctx.freshToken ? ctx.freshToken() : token)}`};
+  const byDefault = defaultPbx(env);
+  if (byDefault) return targetOf(ctx, savedAccess(byDefault, env), 'default');
+  const saved = savedPbxs(env);
+  if (saved.length === 1) return targetOf(ctx, savedAccess(saved[0].host, env), 'only');
+  if (!saved.length) throw new AuthError('No PBX chosen: wx-admin login <host>');
+  throw new AuthError('Several PBX are saved and none is the default: give --pbx or run wx-admin pbx use <host>');
 }
+
+// How a PBX is signed in to, for people: "Company API Key", "Simple Token", "admin · Basic", "admin · WMS sign-in".
+export const accessLabel = (p) =>
+  p.auth === 'apikey'
+    ? 'Company API Key'
+    : p.auth === 'token'
+      ? 'Simple Token'
+      : `${p.user ?? p.username ?? '?'} · ${p.mode === 'basic' ? 'Basic' : 'WMS sign-in'}`;
 
 const basicHeader = (a) => `Basic ${Buffer.from(`${a.username}:${a.password}`).toString('base64')}`;
 
@@ -241,9 +210,10 @@ function targetOf(ctx, a, by, {persist = true} = {}) {
   const base = {host: a.host, port: a.port ?? 443, auth: a.auth, by};
   if (a.auth === 'password') {
     // A new access being checked before it is saved: its mode was chosen at sign-in, a refusal is final.
-    if (!persist && a.mode === 'basic') return {...base, mode: 'basic', header: async () => basicHeader(a)};
+    if (!persist && a.mode === 'basic')
+      return {...base, mode: 'basic', user: a.username, header: async () => basicHeader(a)};
     const {header, onUnauthorized} = passwordAccess(ctx, a, {persist});
-    return {...base, mode: a.mode, header, ...(persist ? {onUnauthorized} : {})};
+    return {...base, mode: a.mode, user: a.username, header, ...(persist ? {onUnauthorized} : {})};
   }
   return {...base, header: async () => `Bearer ${a.auth === 'apikey' ? a.key : a.token}`};
 }
@@ -417,13 +387,11 @@ function hint(status, target, method, scope) {
   if (status === 401) {
     return key
       ? 'The PBX did not accept the API key: it may have expired or been deleted (WMS → PBX → Integrations → Company API Keys).'
-      : target.auth === 'login'
-        ? 'The PBX did not accept the x-bees login: log in again (wx-admin login).'
-        : target.auth === 'password' && target.mode === 'basic'
-          ? `The PBX did not accept Basic for this user (it needs ALLOW_BASIC_AUTH=true and the right password): wx-admin login ${target.host}`
-          : target.auth === 'password'
-            ? `The PBX did not accept the sign-in: wx-admin login ${target.host}`
-            : `The PBX did not accept the access: check it (wx-admin pbx check) or sign in again (wx-admin login ${target.host}).`;
+      : target.auth === 'password' && target.mode === 'basic'
+        ? `The PBX did not accept Basic for this user (it needs ALLOW_BASIC_AUTH=true and the right password): wx-admin login ${target.host}`
+        : target.auth === 'password'
+          ? `The PBX did not accept the sign-in: wx-admin login ${target.host}`
+          : `The PBX did not accept the access: check it (wx-admin pbx check) or sign in again (wx-admin login ${target.host}).`;
   }
   if (status === 403) {
     const need = scope ? `${scope}:${['GET', 'HEAD'].includes(method) ? 'read' : '*'}` : undefined;
