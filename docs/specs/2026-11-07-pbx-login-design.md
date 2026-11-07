@@ -13,17 +13,21 @@ Key through `pbx add`) is the second thing the help shows.
 After this change:
 
 - `wx-admin login [--pbx] <host>` signs in to a PBX. It asks how: a **Company API Key** (recommended, with the reason),
-  or the **WMS login and password** with the two-factor code, as the WMS web interface does. Flags choose without the
-  menu (`--api-key`, `--password`, `--basic`, `--token`) for scripts and agents.
+  or the **WMS login and password**. With a login and password it finds the best way itself: **Basic** when the PBX
+  accepts it, else the **WMS token sign-in** with the two-factor code, as the WMS web interface does. The password is
+  saved, so that it can move from one to the other later by itself (an administrator turns `ALLOW_BASIC_AUTH` on or
+  off). Flags choose without the menu (`--api-key`, `--password`, `--basic`, `--token`) for scripts and agents.
 - The x-bees login is gone from `wx-admin`: no `login <e-mail>`, `logout` of x-bees, `profile`, `--profile`, nor the
   "PBX of the x-bees login" fallback. `wx` keeps all of it unchanged.
 - `wx-admin status` says which PBX the commands go to, with what access and until when.
 
 Success: a customer administrator with only a WMS login, password and authenticator app runs `wx-admin login mypbx`,
-answers the menu, the password and the code, and then uses every command without typing them again for as long as
-the sign-in is used at least every 15 days (7 for the root `admin`); the password is never saved. On a PBX whose WMS
-does not have the token sign-in yet (most PBX of customers for now), the menu still offers it and a refusal leads to the
-API key.
+answers the menu, the password and the code, and then uses every command without typing them again: with Basic for
+good, with the token sign-in as long as it is used at least every 15 days (7 for the root `admin`), after which the
+saved password signs in again and only the 2FA code is asked. A PBX that offers neither (an older WMS with Basic off)
+gets a clear answer that leads to the API key.
+
+The order of preference: **1. Company API Key**, **2. Basic**, **3. the WMS token sign-in** (refresh token).
 
 ### What is known
 
@@ -82,28 +86,34 @@ How should wx-admin sign in to mypbx.wildixin.com?
      without a password or a 2FA code, limited to the scopes you give it, and
      revoked in WMS without touching anyone's password. Best for scripts too.
   2. WMS login and password
-     As you sign in to WMS, with your 2FA code. Nothing to set up; the sign-in
-     lasts 15 days from its last use (7 for admin), then you type the password
-     and the code again. The password is not saved. Needs a recent WMS.
+     Nothing to set up. Uses Basic when the PBX allows it, else signs in as WMS
+     does, with your 2FA code. The password is saved on this computer (0600),
+     so wx-admin can sign in again by itself; only a 2FA code is ever asked.
 ```
 
-- Before the menu, one request that is not a sign-in attempt tells whether the PBX has the token sign-in (to be fixed
-  during the work against the test PBX and an older one: e.g. `GET /api/v1/auth/login/` → 405 there, 404 without).
-  Without it, item 2 is shown disabled with the reason ("this PBX's WMS does not offer it yet"), as the picker shows
-  disabled items, and item 1 is preselected.
 - **API key** (`--api-key`): before the hidden prompt, the steps: WMS → PBX → Integrations → Company API Keys, the
   scopes (`pbx:read` to read, `pbx:*` for changes and `config import`), that it is shown once. Then as `pbx add
   --api-key` today.
-- **Password** (`--password`, new kind `password`): the user (`--user`, else asked with `admin` as default), the
-  password (hidden, or the first line of stdin), then the flow of section 3. A PBX without the token endpoints
-  (404, section 1 point 1): `AuthError` "This PBX does not offer the WMS sign-in for tools yet (it comes with a WMS
-  newer than <version of the PBX>): use a Company API Key (wx-admin login <host> --api-key) or Basic". A 403 shows the
-  PBX's reason (too many attempts, a new location to confirm in WMS, …). The code: `--code CODE`, else asked on a
-  terminal, else a usage error ("this PBX asks for a 2FA code (googleauthenticator): give --code"). For `email` and
-  `sms` the prompt says the PBX has sent it; an empty answer asks the PBX to send it again (once per empty answer).
-- **Basic** (`--basic`) and **Simple Token** (`--token`): flags only, not in the menu, as `pbx add` today. The help
-  says when Basic is the right choice: a script on a PBX without 2FA, where nobody can type a code; it needs
-  `ALLOW_BASIC_AUTH=true` and keeps the password on disk (0600).
+- **Login and password** (`--password`, the access kind `password`): the user (`--user`, else asked with `admin` as
+  default), the password (hidden, or the first line of stdin), then, with **one attempt each** (failed attempts may
+  count towards the PBX's lockout):
+  1. **Basic**: one read (`GET /Dictionaries`) with `Basic`. 200 → mode `basic`, done.
+  2. Else the **token sign-in** of section 3 with the same login and password. A token → mode `token`, done.
+     `next` → the 2FA code: `--code CODE`, else asked on a terminal, else a usage error ("this PBX asks for a 2FA code
+     (googleauthenticator): give --code"); for `email` and `sms` the prompt says the PBX has sent it, an empty answer
+     asks the PBX to send it again (once per empty answer).
+  3. The token sign-in says the login or password is wrong (401 with its reason) → that error, nothing saved: a
+     wrong password, not a Basic that is off (the 401 of step 1 alone cannot tell the two apart).
+  4. 404 (no token sign-in on this WMS) after a refused Basic → `AuthError`: "This PBX accepts neither Basic
+     (ALLOW_BASIC_AUTH is off) nor the WMS sign-in for tools (it comes with a newer WMS): use a Company API Key
+     (wx-admin login <host> --api-key)". A 403 shows the PBX's reason (too many attempts, a new location to confirm
+     in WMS, …).
+  The output says which way it took and that the password is saved: `Signed in to mypbx.wildixin.com as admin with
+  Basic. The password is saved in ~/.wildix/admin/pbx/mypbx.wildixin.com.json (0600): Basic bypasses 2FA, keep this
+  computer safe.` or `… with the WMS sign-in (2FA), until 2026-11-22; the password is saved so that wx-admin can sign
+  in again by itself (a 2FA code will be asked).`
+- **`--basic`**: Basic only (step 1), no token fallback at sign-in; the access is the same kind `password`, mode
+  `basic`. **`--token`** (Simple Token): flag only, as `pbx add` today (deprecated by Wildix).
 - Then, unless `--no-check`, one read of the PBX with the new access (as `pbx add`), the serial recorded. On success
   the access is saved (an access saved before for the host is replaced only now) and, when no default PBX is set,
   this PBX becomes the default one. Output: `Signed in to mypbx.wildixin.com (serial …) with a WMS login (admin),
@@ -122,15 +132,15 @@ Its own command (the core `status` reads x-bees sessions). No network unless `--
 
 ```
 wx-admin  1.4.0
-PBX       * mypbx.wildixin.com       serial 2211000000ef  WMS login (admin)   until 2026-11-14 16:26
+PBX       * mypbx.wildixin.com       serial 2211000000ef  admin · WMS sign-in   until 2026-11-22 16:26
             other.example.com:8443                        Company API Key
-            lab.wildixin.com                              Basic (admin)
+            lab.wildixin.com                              admin · Basic
           * the default PBX: commands without --pbx go there
 ```
 
 - Also shown: `WILDIX_PBX_API_KEY for <WILDIX_PBX_HOST>` when set (it wins, as today).
 - `--check`: one read per PBX (`GET /Dictionaries`), each line gets `accepted` or the refusal with its hint; a
-  `password` access is renewed if needed. Exit 1 when one is refused, as `--all-pbx`.
+  `password` access in mode `token` first tries Basic once (moving to it when the PBX now accepts it), else renews. Exit 1 when one is refused, as `--all-pbx`.
 - No PBX: `Not signed in to any PBX: wx-admin login <host>`. JSON: `{version, pbxs: [{host, port, serial, auth,
   user?, validUntil?, default, accepted?, error?}], environmentKey: host|null}`.
 
@@ -159,35 +169,44 @@ mentions the x-bees login. The saved x-bees sessions in `$WILDIX_CONFIG_DIR` are
 Saved in `admin/pbx/<host>.json` (0600, written atomically, as every access):
 
 ```json
-{"host": "...", "port": 443, "auth": "password", "username": "admin", "serial": "...",
- "refresh": "<refresh token>", "validUntil": "<ISO, the exp of the refresh token>",
+{"host": "...", "port": 443, "auth": "password", "username": "admin", "password": "...", "mode": "basic|token",
+ "serial": "...", "refresh": "<refresh token>", "validUntil": "<ISO, the exp of the refresh token>",
  "accessToken": "<JWT>", "accessTokenExpires": "<ISO>"}
 ```
 
-Never saved: the password, the code, `PHPSESSID` (needed only between the two steps of a sign-in) and `__rc`.
-The refresh token holds the PHP session id: the file is as sensitive as a password, and treated so.
+The password is always saved: the file is the most sensitive one wx-admin keeps (with Basic it opens the PBX without
+2FA), as the `basic` access is today. Never saved: the 2FA code, `PHPSESSID` (only between the two steps of a
+sign-in) and `__rc`. The refresh token holds the PHP session id. The operating system's keychain (macOS Keychain,
+libsecret) is left for later; the file stays 0600 in a 0700 folder.
 
-- **Sign-in**: `signIn({host, port, username, password, askCode, fetch})` runs point 2 of section 1 with `remember:
-  "1"` and `redirect: 'manual'` (a redirect is refused, as for every access); `PHPSESSID` is carried from the first
-  step to the second in memory only; the refresh token is read from the `wms_refresh` of `Set-Cookie`, its expiry
-  from the `exp` of its payload (else `Max-Age`). Refusals: 401 or `type: error` → `AuthError` with the PBX's
-  `reason` (wrong password, wrong code), nothing saved; 404 → the error of section 2.
-- **The header of a request**: the saved access token while it has more than 60 s left (by its `exp` and by
-  `accessTokenExpires`); else `POST /api/v1/auth/refresh/` with `{"refresh_token"}` in the body (the documented way
-  for clients without cookies, no Authorization header). The new access token, the new refresh token (from
-  `Set-Cookie`) and its expiry are saved at once. Long commands (`config copy`, `--all-pbx`) get a fresh header per
-  request, as the x-bees login did. A 401 from the API with a token that should still be valid (a clock that is off):
-  one renewal and one retry.
-- **Two commands at once**: the renewal re-reads the file first; when its refresh is refused (401), it re-reads the
-  file once more and, if another process has saved a newer refresh token meanwhile, uses that. (Server side, an older
+An access saved before as `auth: "basic"` (`pbx add --basic`) is read as `password` with mode `basic`.
+
+- **Token sign-in**: `signIn({host, port, username, password, askCode, fetch})` runs point 2 of section 1 with
+  `remember: "1"` and `redirect: 'manual'` (a redirect is refused, as for every access); `PHPSESSID` is carried from
+  the first step to the second in memory only; the refresh token is read from the `wms_refresh` of `Set-Cookie`, its
+  expiry from the `exp` of its payload (else `Max-Age`).
+- **Mode `basic`**: `Authorization: Basic …` on every request. A 401 → the token sign-in with the saved password
+  (Basic turned off, or the password changed): a token → mode `token` and the request is retried; `next` → the 2FA
+  code on a terminal, else `AuthError` (exit 2) "Basic is no longer accepted by <host> and its WMS sign-in asks for a
+  2FA code: wx-admin login <host>"; wrong password → `AuthError` "The password of admin on <host> has changed:
+  wx-admin login <host>".
+- **Mode `token`**: the saved access token while it has more than 60 s left (by its `exp`); else `POST
+  /api/v1/auth/refresh/` with `{"refresh_token"}` in the body (no Authorization header); the new access token, the new
+  refresh token (from `Set-Cookie`) and its expiry are saved at once. Long commands (`config copy`, `--all-pbx`) get a
+  fresh header per request. A 401 from the API with a token that should still be valid (a clock that is off): one
+  renewal and one retry.
+- **The refresh refused** (unused for 15 days, 7 for `admin`; a logout or a password change in WMS): first **Basic**,
+  once (an administrator may have turned it on) → mode `basic`; else the token sign-in with the saved password, as in
+  mode `basic`. Basic is tried again only here, at `login` and at `status --check`, never on every command (each
+  failed attempt may count towards the lockout).
+- **Two commands at once**: a renewal re-reads the file first; when its refresh is refused, it re-reads the file once
+  more and, if another process has saved a newer refresh token or mode meanwhile, uses that. (Server side, an older
   refresh token stays valid while its session lives, so a race costs nothing; the re-read is a guard.)
-- **Expired**: the renewal refused → `AuthError` (exit 2): `The sign-in to <host> has ended (unused for 15 days, 7
-  for admin, or ended in WMS: logout, password change): wx-admin login <host>`. The tokens are removed from the file;
-  the access stays listed, with `status` showing `signed out`.
-- **Logout**: `POST /api/v1/auth/logout/` `{"refresh_token"}` before the file is removed.
-- Tokens are sent only to their PBX over https, the refresh token only to `/api/v1/auth/refresh/` and
-  `/api/v1/auth/logout/`. None is ever printed, logged, or put on a command line or in the environment of a child
-  process.
+- **Logout**: mode `token`: `POST /api/v1/auth/logout/` `{"refresh_token"}`; then the file (with the password) is
+  removed.
+- The password, tokens and Basic header are sent only to their PBX over https; the refresh token only to
+  `/api/v1/auth/refresh/` and `/api/v1/auth/logout/`. None is ever printed, logged, or put on a command line or in
+  the environment of a child process.
 
 ## 4. Other changes found on the way
 
@@ -208,35 +227,52 @@ The refresh token holds the PHP session id: the file is as sensitive as a passwo
 
 ## 6. Docs and release
 
-- wx-admin README: quick start with `wx-admin login mypbx`; the access table with three choices in this order:
-  Company API Key (recommended, why), WMS login and password (15 days from the last use, 7 for `admin`; 2FA; needs a WMS with the token sign-in; nothing
-  saved but the refresh token), Basic
-  (needs `ALLOW_BASIC_AUTH`, keeps the password); Simple Token last (deprecated). No x-bees login.
+- wx-admin README: quick start with `wx-admin login mypbx`; the access in this order: Company API Key (recommended,
+  why); login and password, which uses Basic when `ALLOW_BASIC_AUTH=true` (no 2FA: say so) else the WMS token
+  sign-in (2FA, 15 days from the last use, 7 for `admin`, a recent WMS), the password saved in both cases and why;
+  Simple Token last (deprecated). No x-bees login.
 - AGENTS of wx-admin, root README row, `announce/{ru,en}.md`, the CHANGELOGs (wx-admin: Added, Changed, **Removed**;
   wldx-core: `profiles: false`, the picker; wx: nothing of its own).
 - Version 1.4.0 for the three packages (lockstep). The announcement page of wx-admin is republished after the release.
 
 ## 7. Tests
 
-- `wms-login`: sign-in without 2FA, with `googleauthenticator`, with `email` (empty answer → resend), wrong password,
-  wrong code, 403 with a reason, 404 (an older WMS) → the API-key hint, refresh token read from `Set-Cookie`,
-  `PHPSESSID` never saved, redirect refused; renewal with `refresh_token` in the body, the new refresh token saved,
-  expired (401) → exit 2 and tokens removed; a 401 of the API → one renewal and retry; the race of two processes.
+- `wms-login`: token sign-in without 2FA, with `googleauthenticator`, with `email` (empty answer → resend), wrong
+  password, wrong code, 403 with a reason, refresh token read from `Set-Cookie`, `PHPSESSID` never saved, redirect
+  refused; renewal with `refresh_token` in the body, the new refresh token saved; a 401 of the API → one renewal and
+  retry; the race of two processes.
+- The choice at `login --password`: Basic accepted → mode `basic` and no token sign-in; Basic refused and token
+  sign-in works → mode `token`; Basic refused and wrong password → the wrong-password error, nothing saved; Basic
+  refused and 404 → the API-key hint; exactly one attempt of each (counted in the fake PBX).
+- Moving between modes: `basic` + 401 → token sign-in, mode `token` saved, request retried; `token` + refresh refused
+  → Basic tried once → mode `basic`; else sign-in again with the saved password (2FA: code on a TTY, else exit 2 with
+  `wx-admin login <host>`); a changed password → its error; Basic never tried on an ordinary renewal.
+- An old `auth: "basic"` file works as `password` mode `basic`.
 - `login`: menu on a TTY (API key first), flags without the menu, no TTY and no flag → 64, argument and `--pbx`
   together → 64, `--code` without TTY, the default PBX set only when none was, failure keeps the old access.
 - `status`: no PBX, several, the environment key, `--check` with one refused (exit 1), JSON shape.
 - The PBX of a command: only one saved → it; several without default → exit 2 with the hint; no x-bees fallback.
 - `wx-admin` has no `profile`, no `--profile`, no x-bees `login`; `wx` still has them (core tests unchanged).
 - Secrets: no password, code, token or cookie in any output, log or error (a test over every text of the flow).
-- Live, once, on the test PBX (its WMS has the endpoints): `login --password` with the code typed by the user, a
-  command, a renewal (the saved access token removed), `status --check`, `logout` (then the old refresh token is
-  refused). On a PBX of a released WMS: `login --password` gives the API-key hint.
+- Live, once, on the test PBX (Basic on, the token sign-in present): `login --password` → mode `basic`; `login
+  --password` with the saved Basic access file turned to mode `token` by hand (or on a PBX with Basic off) → the
+  token sign-in with the code typed by the user; a command; a renewal (the saved access token removed); `status
+  --check`; `logout` (then the old refresh token is refused). On a PBX of a released WMS with Basic off: the API-key
+  hint.
 
 ## Review focus
 
-1. The race of two commands renewing at once (a rotated `wms_refresh` saved by one, refused for the other).
-2. A clock that is off: the token's `exp` against the local clock (renew when the PBX says 401, once, as well).
-3. A PBX that answers `next` with a factor we do not know: ask for "the code of <factor>", never fail.
-4. Piped password and no code: the error must say `--code`, not hang on a prompt.
-5. A PBX without the token endpoints (every customer PBX today): 404 must give the API-key hint, never a stack or
-   a vague "login failed".
+1. Lockout: no path may try a wrong password more than once per command (Basic and the token sign-in together count
+   as two attempts at most), and Basic is never retried on every request.
+2. A Basic 401 that means "Basic is off" and one that means "wrong password" look the same: the decision must come
+   from the token sign-in's answer, never from the Basic 401 alone.
+3. The race of two commands renewing or changing mode at once (re-read the file, never lose a newer refresh token).
+4. Piped password and no code: the error must say `--code`, not hang on a prompt; a factor we do not know is asked
+   as "the code of <factor>".
+5. The password file: 0600 in a 0700 folder, never printed (errors included), removed by `logout`.
+
+## Later
+
+- The saved password will also serve other ways in to the PBX that need it (an SSH access to read logs is planned);
+  this spec only keeps it.
+- The operating system's keychain for the password instead of the 0600 file.
