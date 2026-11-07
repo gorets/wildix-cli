@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
 import {complete} from '../src/cli.mjs';
-import {normalizeHost, savedAccess} from '../src/pbx.mjs';
+import {normalizeHost, savedAccess, setDefaultPbx} from '../src/pbx.mjs';
 import {fakeFetch, run, tempConfigDir} from './helpers.mjs';
 
 const NOW = Date.UTC(2026, 10, 7, 12);
@@ -14,7 +14,7 @@ function home() {
   return {WILDIX_CONFIG_DIR: tempConfigDir()};
 }
 const add = (env, argv, secret, fetch = fakeFetch(ok({records: []}))) =>
-  run(['pbx', 'add', ...argv], {env, fetch, stdin: `${secret}\n`, now: () => NOW});
+  run(['login', ...argv], {env, fetch, stdin: `${secret}\n`, now: () => NOW});
 
 test('a host: a bare name is a cloud PBX; host names and IPs as given; nothing else', () => {
   assert.equal(normalizeHost('demo'), 'demo.wildixin.com');
@@ -24,7 +24,7 @@ test('a host: a bare name is a cloud PBX; host names and IPs as given; nothing e
     assert.throws(() => normalizeHost(bad), bad);
 });
 
-test('pbx add reads the secret from stdin, checks it with one read, keeps it 0600, never prints it', async () => {
+test('login reads the secret from stdin, checks it with one read, keeps it 0600, never prints it', async () => {
   const env = home();
   const fetch = fakeFetch(ok({records: []}));
   const r = await add(env, ['demo', '--api-key'], KEY, fetch);
@@ -34,6 +34,8 @@ test('pbx add reads the secret from stdin, checks it with one read, keeps it 060
     port: 443,
     auth: 'apikey',
     serial: null,
+    file: path.join(env.WILDIX_CONFIG_DIR, 'admin', 'pbx', 'demo.wildixin.com.json'),
+    madeDefault: true,
     checked: true,
   });
   assert.equal(fetch.calls[0].url, 'https://demo.wildixin.com/api/v1/Dictionaries');
@@ -45,7 +47,7 @@ test('pbx add reads the secret from stdin, checks it with one read, keeps it 060
   assert.ok(!r.stdout.includes(KEY) && !r.stderr.includes(KEY));
 });
 
-test('pbx add refuses a malformed key, two kinds, and keeps nothing when the PBX refuses the access', async () => {
+test('login refuses a malformed key, two kinds, and keeps nothing when the PBX refuses the access', async () => {
   const env = home();
   assert.equal((await add(env, ['demo', '--api-key'], 'wsk-v1-short')).code, 64);
   assert.equal((await add(env, ['demo', '--api-key', '--token'], KEY)).code, 64);
@@ -77,6 +79,7 @@ test('several PBX: the only saved one, --pbx anywhere, the default one; several 
   await add(env, ['one', '--token'], 'tok-1');
   assert.deepEqual(await urlOf(['dialplan', 'list']), ['https://one.wildixin.com/api/v1/PBX/Dialplans/', 'Bearer', 0]);
   await add(env, ['two', '--basic'], 'pw-2');
+  setDefaultPbx(undefined, env); // the first login made one the default: none now
   const several = await run(['dialplan', 'list'], {env, fetch: fakeFetch()});
   assert.equal(several.code, 2);
   assert.match(
@@ -105,7 +108,7 @@ test('several PBX: the only saved one, --pbx anywhere, the default one; several 
   );
   assert.equal(list.login, undefined);
   assert.equal((await run(['pbx', 'use', '--login'], {env})).code, 64);
-  assert.equal((await run(['pbx', 'remove', 'two'], {env})).code, 0);
+  assert.equal((await run(['logout', 'two'], {env})).code, 0);
   assert.equal((await run(['dialplan', 'list', '--pbx', 'two'], {env, fetch: fakeFetch()})).code, 2);
   assert.deepEqual(complete(['--pbx', ''], env), ['one.wildixin.com\ttoken']);
   assert.deepEqual(complete(['pbx', 'use', 'o'], env), ['one.wildixin.com\ttoken']);

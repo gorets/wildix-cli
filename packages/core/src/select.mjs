@@ -216,7 +216,7 @@ export function select(io, {title, groups, requires}) {
 }
 
 // One item out of a short list (a menu): ↑/↓ or k/j move and skip disabled items, 1–9 pick, enter confirms, esc or
-// Ctrl-C cancel. items: [{label, note?, disabled?: reason}]. Resolves to the index. Without a terminal it is a usage
+// Ctrl-C cancel. items: [{label, note? (lines), disabled?: reason}]. Resolves to the index. Without a terminal it is a usage
 // error (the caller offers options instead).
 export async function choose(io, {title, items, initial = 0}) {
   const {stdin, stderr} = io;
@@ -230,7 +230,10 @@ export async function choose(io, {title, items, initial = 0}) {
     '',
     ...items.flatMap((it, i) => [
       `${at === i ? '›' : ' '} ${i + 1}. ${one(it.label)}${it.disabled ? ` (${one(it.disabled)})` : ''}`,
-      ...(it.note ? [`     ${one(it.note)}`] : []),
+      ...String(it.note ?? '')
+        .split('\n')
+        .filter((l) => l.trim())
+        .map((l) => `     ${one(l.trim())}`),
     ]),
   ];
   if (!stdin.isTTY || typeof stdin.setRawMode !== 'function')

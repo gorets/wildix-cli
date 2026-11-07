@@ -10,6 +10,7 @@ import {groups as config} from './config.mjs';
 import {groups as device} from './device.mjs';
 import {groups as dialplan} from './dialplan.mjs';
 import {groups as kb} from './kb.mjs';
+import {login, logout} from './login.mjs';
 import {groups as pbx} from './pbx.mjs';
 import {groups as phonebook} from './phonebook.mjs';
 import {groups as queue} from './queue.mjs';
@@ -42,7 +43,7 @@ export const GROUPS = {
   ...pbx,
 };
 
-export const COMMANDS = {...api, ...cloud};
+export const COMMANDS = {...api, ...cloud, login, logout};
 
 // The commands that only read the PBX (no change there, no file written): they may run with --all-pbx.
 const READ_ONLY = {

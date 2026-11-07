@@ -1,4 +1,4 @@
-// The PBX a command works on, and how it signs in there (wx-admin login, or pbx add):
+// The PBX a command works on, and how it signs in there (wx-admin login):
 //   - a Company API Key (wsk-v1-…, recommended by Wildix);
 //   - a login and password (`password`): Basic when the PBX takes it (ALLOW_BASIC_AUTH=true), else the WMS token
 //     sign-in with its second factor (src/wms-login.mjs); the password is kept so that wx-admin moves between the two
@@ -25,8 +25,7 @@ import {readSecret} from 'wldx-core/secret';
 import {renew, signIn, WmsAuthError} from './wms-login.mjs';
 
 export const AUTH_TYPES = ['apikey', 'token', 'password'];
-// The access of a PBX as an older wx-admin saved it: Basic is now the mode `basic` of a `password` access.
-const upgraded = (a) => (a?.auth === 'basic' ? {...a, auth: 'password', mode: 'basic'} : a);
+
 const IPV4 = /^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/;
 const HOSTNAME = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 export const API_KEY = /^wsk-v1-[A-Za-z0-9]{93}$/;
@@ -51,7 +50,7 @@ export function checkPort(port) {
 
 // A PBX as --pbx (or a command argument) names it: the serial of a PBX with saved access, bare or as <serial>.wildixin.com, else a host as normalizeHost takes it. A serial is 8 to 16 hex digits;
 // it is looked up first, as a bare name would otherwise be read as <name>.wildixin.com. An unknown serial stays
-// <serial>.wildixin.com (DNS may not know it: pbx add and pbx check record the serial of a PBX for --pbx).
+// <serial>.wildixin.com (DNS may not know it: login and pbx check record the serial of a PBX for --pbx).
 export function pbxHostOf(ref, ctx = {}) {
   const s = String(ref ?? '')
     .trim()
@@ -68,6 +67,17 @@ export function pbxHostOf(ref, ctx = {}) {
 
 const pbxDir = (env) => path.join(configDir(env), 'admin', 'pbx');
 const accessFile = (host, env) => path.join(pbxDir(env), `${host}.json`);
+// Where the access of a PBX is saved (0600).
+export const accessPath = (host, env = process.env) => accessFile(host, env);
+// An idle WMS session is removed by the PBX after 36 hours (and at a restart): the refresh token dies with it.
+export const IDLE_SESSION_MS = 36 * 3600 * 1000;
+// Until when a WMS sign-in lasts at most: the earlier of the refresh token's expiry and the last use + 36 hours.
+export function signInUntil(a) {
+  const ends = [a.validUntil, a.lastUsed && new Date(Date.parse(a.lastUsed) + IDLE_SESSION_MS).toISOString()].filter(
+    Boolean,
+  );
+  return ends.length ? ends.sort()[0] : null;
+}
 const settingsFile = (env) => path.join(configDir(env), 'wx-admin.json');
 
 function readJson(file) {
@@ -95,7 +105,7 @@ const readSettings = (env) => readJson(settingsFile(env)) ?? {};
 
 // The saved access of a PBX ({host, port, auth, …secret}), or undefined.
 export function savedAccess(host, env = process.env) {
-  const a = upgraded(readJson(accessFile(host, env)));
+  const a = readJson(accessFile(host, env));
   return a && AUTH_TYPES.includes(a.auth) && a.host === host ? a : undefined;
 }
 
@@ -132,9 +142,8 @@ export function savedPbxs(env = process.env) {
 }
 
 export function saveAccess(access, env = process.env) {
-  const a = upgraded(access);
-  if (!AUTH_TYPES.includes(a.auth)) throw new UsageError(`Unknown kind of access: ${a.auth}`);
-  writePrivate(accessFile(a.host, env), a);
+  if (!AUTH_TYPES.includes(access.auth)) throw new UsageError(`Unknown kind of access: ${access.auth}`);
+  writePrivate(accessFile(access.host, env), access);
 }
 
 export function removeAccess(host, env = process.env) {
@@ -405,10 +414,10 @@ function hint(status, target, method, scope) {
 
 // A client of the PBX REST API (https://<pbx>/api/v1). call(method, path, body) unwraps {"type":"result","result":X}
 // to X and turns {"type":"error",…} and HTTP errors into a PbxError with a hint.
-// access: a saved-access object to use instead of resolving one ({host, port, auth, …}): pbx add checks a new access
+// access: a saved-access object to use instead of resolving one ({host, port, auth, …}): login checks a new access
 // with it before anything is saved.
 export async function pbxClient(ctx, {access} = {}) {
-  const target = access ? targetOf(ctx, upgraded(access), 'option', {persist: false}) : await resolvePbx(ctx);
+  const target = access ? targetOf(ctx, access, 'option', {persist: false}) : await resolvePbx(ctx);
   const base = pbxBase(ctx, target);
   // options.api 'v2': the routes the PBX serves at /api/v2 (call-group managers); else /api/v1.
   const root = (version) => `${base}/api/${version === 'v2' ? 'v2' : 'v1'}`;

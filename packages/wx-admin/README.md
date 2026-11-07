@@ -431,14 +431,12 @@ The knowledge base of the cloud (WIM): knowledge bases, data sources, documents,
 
 ### wx-admin pbx
 
-The PBX to work on: saved access (API key, token, user), the default one, a check.
+The PBX signed in to (wx-admin login): the list, the default one, a check.
 
 | Command | What it does |
 | --- | --- |
-| `wx-admin pbx add <host> (--api-key \| --token \| --basic [--user NAME]) [--port N] [--no-check]` | save access to a PBX; the secret is typed hidden or read from stdin, never an argument |
 | `wx-admin pbx list` | the PBX with saved access; * marks the default one |
 | `wx-admin pbx use <host>` | make a PBX with saved access the default one (commands without --pbx go there) |
-| `wx-admin pbx remove <host>` | forget the saved access to a PBX (on this computer only) |
 | `wx-admin pbx check` | which PBX a command would use, and whether it accepts the access (one read) |
 
 ### wx-admin api
@@ -452,6 +450,8 @@ The PBX to work on: saved access (API key, token, user), the default one, a chec
 | Command | What it does |
 | --- | --- |
 | `wx-admin cloud [<service> [<operation>]] [--param NAME=VALUE]... [--data JSON \| --data-file FILE\|-] [--yes] [--show-secrets]` | any operation of the cloud services (knowledge base, voicebots, WIM tools, Wilma) with the token of the PBX |
+| `wx-admin login [<host>] [--api-key \| --password [--no-basic] [--user NAME] [--code CODE] \| --basic [--user NAME] \| --token] [--port N] [--no-check]` | sign in to a PBX: a Company API Key, or a login and password (Basic, else the WMS sign-in with 2FA) |
+| `wx-admin logout [<host>]` | sign out of a PBX: end the WMS sign-in on the PBX and forget the access on this computer |
 | `wx-admin completion [bash\|zsh\|fish]` | the shell completion script (default: the shell of `$SHELL`) |
 <!-- commands:end -->
 

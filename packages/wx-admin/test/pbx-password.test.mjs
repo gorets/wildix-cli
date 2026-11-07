@@ -33,16 +33,6 @@ async function tokenAccess(pbx, extra = {}) {
   };
 }
 
-test('a legacy basic file reads as password/basic and works', async () => {
-  const pbx = fakeWms({now});
-  const env = home({auth: 'basic', username: 'admin', password: 'pw'});
-  assert.equal(savedAccess(HOST, env).auth, 'password');
-  assert.equal(savedAccess(HOST, env).mode, 'basic');
-  const r = await check(env, pbx.fetch);
-  assert.equal(r.code, 0, r.stderr);
-  assert.equal(pbx.state.attempts.signIn, 0);
-});
-
 test('mode basic sends Basic; a 401 moves to token with one sign-in and retries the request', async () => {
   const pbx = fakeWms({now});
   const env = home({auth: 'password', mode: 'basic', username: 'admin', password: 'pw'});

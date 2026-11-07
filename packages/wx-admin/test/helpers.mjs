@@ -1,3 +1,4 @@
+import {EventEmitter} from 'node:events';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -41,7 +42,7 @@ const SPECIAL = new Set(['__complete', 'completion']);
 
 // Runs wx-admin in-process. JSON output unless `output: 'text'` (or the arguments name an output themselves). `registry`
 // replaces the commands: {groups: {name: group}, commands: {name: command}} (to test a group before it is listed
-// in src/commands/index.mjs). `tty: true` makes stdin a terminal; `stdin` is its text.
+// in src/commands/index.mjs). `tty: true` makes stdin a terminal; `stdin` is its text, or a terminal() below.
 export async function run(
   argv,
   {
@@ -57,8 +58,8 @@ export async function run(
 ) {
   const stdout = sink();
   const stderr = sink();
-  const input = Readable.from([Buffer.from(stdin)]);
-  if (tty) input.isTTY = true;
+  const input = typeof stdin === 'string' ? Readable.from([Buffer.from(stdin)]) : stdin;
+  if (tty && typeof stdin === 'string') input.isTTY = true;
   const args =
     SPECIAL.has(argv[0]) || argv.some((a) => a === '--output' || a.startsWith('--output='))
       ? argv
@@ -78,4 +79,26 @@ export function fakeCognito(...answers) {
   wrapped.targets = () =>
     fetch.calls.map((c) => c.headers['x-amz-target'].replace('AWSCognitoIdentityProviderService.', ''));
   return wrapped;
+}
+
+// A terminal in raw mode: each resume() (a prompt or a menu starting to listen) types the next group of keys.
+export function terminal(...groups) {
+  const input = new EventEmitter();
+  input.isTTY = true;
+  input.raw = [];
+  input.setRawMode = (on) => input.raw.push(on);
+  input.setEncoding = () => {};
+  input.pause = () => {};
+  input.resume = () => {
+    const keys = groups.shift() ?? [];
+    let i = 0;
+    const next = () => {
+      if (i < keys.length && input.listenerCount('data')) {
+        input.emit('data', keys[i++]);
+        setImmediate(next);
+      }
+    };
+    setImmediate(next);
+  };
+  return input;
 }

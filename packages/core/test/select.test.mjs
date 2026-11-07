@@ -207,3 +207,9 @@ test('choose: no terminal is a usage error', async () => {
     (e) => e instanceof UsageError && /needs a terminal/.test(e.message),
   );
 });
+
+test('choose: a note of several lines keeps its lines', async () => {
+  const io = terminal(['\r']);
+  await choose(io, {title: 't', items: [{label: 'A', note: 'first line\nsecond line'}]});
+  assert.match(io.stderr.text, /\n {5}first line\n {5}second line\n/);
+});
