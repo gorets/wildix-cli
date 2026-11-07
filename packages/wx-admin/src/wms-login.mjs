@@ -59,11 +59,10 @@ async function post(base, path, body, {fetch, cookie, what}) {
 function cookies(res) {
   const out = {};
   for (const c of res.headers.getSetCookie?.() ?? []) {
-    const [pair, ...attrs] = c.split(';');
+    const [pair] = c.split(';');
     const i = pair.indexOf('=');
     if (i < 1) continue;
-    const maxAge = attrs.map((a) => /^\s*max-age=(\d+)/i.exec(a)?.[1]).find(Boolean);
-    out[pair.slice(0, i).trim()] = {value: pair.slice(i + 1).trim(), maxAge: maxAge ? Number(maxAge) : undefined};
+    out[pair.slice(0, i).trim()] = {value: pair.slice(i + 1).trim()};
   }
   return out;
 }
@@ -77,12 +76,13 @@ function tokensOf(res, data, what) {
     throw new WmsAuthError(`The PBX answered ${what} without the tokens it should give`, 'failed');
   const accessExp = jwtClaims(accessToken).exp;
   const refreshExp = jwtClaims(refresh.value).exp;
-  const expiresIn = Number(data.result.expires_in) || 3600;
+  if (!Number.isFinite(accessExp) || !Number.isFinite(refreshExp))
+    throw new WmsAuthError(`The PBX answered ${what} with tokens that do not say when they expire`, 'failed');
   return {
     accessToken,
-    accessTokenExpires: iso(accessExp ? accessExp * 1000 : Date.now() + expiresIn * 1000),
+    accessTokenExpires: iso(accessExp * 1000),
     refresh: refresh.value,
-    validUntil: iso(refreshExp ? refreshExp * 1000 : Date.now() + (refresh.maxAge ?? 604800) * 1000),
+    validUntil: iso(refreshExp * 1000),
   };
 }
 

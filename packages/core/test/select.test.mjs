@@ -207,19 +207,3 @@ test('choose: no terminal is a usage error', async () => {
     (e) => e instanceof UsageError && /needs a terminal/.test(e.message),
   );
 });
-
-test('choose: a terminal without raw mode gets a numbered prompt', async () => {
-  const stdin = Readable.from(['2\n3\n']);
-  stdin.isTTY = true;
-  const stderr = {
-    isTTY: true,
-    text: '',
-    write(s) {
-      this.text += s;
-      return true;
-    },
-  };
-  assert.equal(await choose({stdin, stderr}, {title: 't', items: ITEMS}), 2);
-  assert.match(stderr.text, /1\. Company API Key/);
-  assert.match(stderr.text, /Choose 1, 2 or 3: /);
-});

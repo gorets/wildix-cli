@@ -216,8 +216,8 @@ export function select(io, {title, groups, requires}) {
 }
 
 // One item out of a short list (a menu): ↑/↓ or k/j move and skip disabled items, 1–9 pick, enter confirms, esc or
-// Ctrl-C cancel. items: [{label, note?, disabled?: reason}]. Resolves to the index. A terminal without raw mode gets
-// a numbered prompt; no terminal is a usage error (the caller offers options instead).
+// Ctrl-C cancel. items: [{label, note?, disabled?: reason}]. Resolves to the index. Without a terminal it is a usage
+// error (the caller offers options instead).
 export async function choose(io, {title, items, initial = 0}) {
   const {stdin, stderr} = io;
   const usable = (i) => i >= 0 && i < items.length && !items[i].disabled;
@@ -233,8 +233,8 @@ export async function choose(io, {title, items, initial = 0}) {
       ...(it.note ? [`     ${one(it.note)}`] : []),
     ]),
   ];
-  if (!stdin.isTTY) throw new UsageError('Choosing needs a terminal: give the choice as an option');
-  if (typeof stdin.setRawMode !== 'function') return numbered(io, items, lines(-1), usable);
+  if (!stdin.isTTY || typeof stdin.setRawMode !== 'function')
+    throw new UsageError('Choosing needs a terminal: give the choice as an option');
 
   let at = usable(initial) ? initial : items.findIndex((_, i) => usable(i));
   let drawn = 0;
@@ -282,25 +282,4 @@ export async function choose(io, {title, items, initial = 0}) {
       finish(reject, e);
     }
   });
-}
-
-async function numbered(io, items, shown, usable) {
-  const {createInterface} = await import('node:readline');
-  const rl = createInterface({input: io.stdin, terminal: false});
-  const answers = rl[Symbol.asyncIterator]();
-  const numbers = items.map((_, i) => String(i + 1));
-  const ask = `Choose ${numbers.length > 1 ? `${numbers.slice(0, -1).join(', ')} or ${numbers.at(-1)}` : '1'}: `;
-  try {
-    io.stderr.write(`${shown.join('\n')}\n`);
-    for (let tries = 0; tries < 3; tries += 1) {
-      io.stderr.write(ask);
-      const next = await answers.next();
-      if (next.done) break;
-      const n = Number(next.value.trim()) - 1;
-      if (Number.isInteger(n) && usable(n)) return n;
-    }
-    throw new UsageError('No choice was made');
-  } finally {
-    rl.close();
-  }
 }

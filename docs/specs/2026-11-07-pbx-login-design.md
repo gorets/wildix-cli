@@ -161,9 +161,9 @@ PBX       * mypbx.wildixin.com       serial 2211000000ef  admin · WMS sign-in  
 
 ### `pbx` group
 
-`pbx add` stays, as the same command as `login` (same options, same code); `pbx remove` stays as `logout`; `pbx list`
-and `pbx use <host>` stay. Removed: `pbx use --login`, the x-bees row of `pbx list`. `pbx check` stays. The help and
-README show `login`/`logout` first.
+`pbx list`, `pbx use <host>` and `pbx check` stay. Removed: `pbx add` and `pbx remove` (`login` and `logout` replace
+them), `pbx use --login`, the x-bees row of `pbx list`. No compatibility layer anywhere: wx-admin is a new tool, and an
+access saved by 1.3.0 in another shape is not read (sign in again).
 
 ### The PBX of a command
 
@@ -195,12 +195,12 @@ The password is always saved: the file is the most sensitive one wx-admin keeps 
 sign-in) and `__rc`. The refresh token holds the PHP session id. The operating system's keychain (macOS Keychain,
 libsecret) is left for later; the file stays 0600 in a 0700 folder.
 
-An access saved before as `auth: "basic"` (`pbx add --basic`) is read as `password` with mode `basic`.
+An access file in another shape (an older `auth: "basic"`) is not read: sign in again.
 
 - **Token sign-in**: `signIn({host, port, username, password, askCode, fetch})` runs point 2 of section 1 with
   `remember: "1"` and `redirect: 'manual'` (a redirect is refused, as for every access); `PHPSESSID` is carried from
   the first step to the second in memory only; the refresh token is read from the `wms_refresh` of `Set-Cookie`, its
-  expiry from the `exp` of its payload (else `Max-Age`).
+  expiry from the `exp` of its payload (tokens without `exp` are refused).
 - **Mode `basic`**: `Authorization: Basic …` on every request. A 401 → the token sign-in with the saved password
   (Basic turned off, or the password changed): a token → mode `token` and the request is retried; `next` → the 2FA
   code on a terminal, else `AuthError` (exit 2) "Basic is no longer accepted by <host> and its WMS sign-in asks for a
@@ -239,8 +239,8 @@ An access saved before as `auth: "basic"` (`pbx add --basic`) is read as `passwo
 - `createMain(spec)`: `spec.profiles === false` drops `--profile` from the global options, the help and completion,
   and gives no `freshToken`/`token` to commands. Default stays as today (`wx`).
 - `wldx-core/select` has only the checkbox tree. New: `choose(io, {title, items: [{label, note}]})` → the index, a
-  single-choice list on stderr with ↑/↓, Enter, 1–9, Esc or Ctrl-C to cancel (`UsageError('Cancelled')`, as the picker), and a
-  numbered prompt (`Choose 1 or 2:`) when the terminal has no raw mode.
+  single-choice list on stderr with ↑/↓, Enter, 1–9, Esc or Ctrl-C to cancel (`UsageError('Cancelled')`, as the picker); no
+  raw-mode terminal → `UsageError` (the caller lists the flags).
 
 ## 6. Docs and release
 
