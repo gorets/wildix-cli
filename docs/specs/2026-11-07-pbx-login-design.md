@@ -23,8 +23,8 @@ After this change:
 
 Success: a customer administrator with only a WMS login, password and authenticator app runs `wx-admin login mypbx`,
 answers the menu, the password and the code, and then uses every command without typing them again: with Basic for
-good, with the token sign-in as long as it is used at least every 15 days (7 for the root `admin`), after which the
-saved password signs in again and only the 2FA code is asked. A PBX that offers neither (an older WMS with Basic off)
+good, with the token sign-in as long as it is used at least every 36 hours and the PBX does not restart (at most 15
+days, 7 for the root `admin`), after which the saved password signs in again and only the 2FA code is asked. A PBX that offers neither (an older WMS with Basic off)
 gets a clear answer that leads to the API key.
 
 The order of preference: **1. Company API Key**, **2. Basic**, **3. the WMS token sign-in** (refresh token).
@@ -57,6 +57,13 @@ Authenticator:
 5. **Lifetime of the refresh token**: `REFRESH_TOKEN_LIFETIME` (default 7 days); with `remember` **15 days**, except
    for the root `admin`, who never gets more than `REFRESH_TOKEN_LIFETIME`. The class is kept at every renewal. So a
    sign-in lasts 15 days (7 for `admin`) **from its last use**.
+5a. **An idle session is removed after 36 hours** (the PBX's session cleaner deletes session files untouched for
+   36 h; a renewal touches it), and **every session is removed when the PBX restarts**. The refresh token dies with
+   its session: in practice a token sign-in lasts while it is used at least every 36 hours and the PBX does not
+   restart; 7 / 15 days is only the outer limit. Tokens are not rotated (an older refresh token stays valid while its
+   session lives). An access token stays valid until its expiry even after a logout, a password change or a restart.
+   An invalid or expired Bearer gets `401` with `WWW-Authenticate: Bearer error="invalid_token"`, even next to a valid
+   session cookie.
 6. **`__rc`** (the remember cookie of the web pages) never signs in the root `admin` (the API description: "never for
    `admin`"): that is why it did nothing in the probes, all made as `admin`. The token client does not need it.
 7. **Logout.** `POST /api/v1/auth/logout/` with `{"refresh_token"}` destroys the session of that token (and of the
@@ -89,7 +96,8 @@ How should wx-admin sign in to mypbx.wildixin.com?
   2. WMS login and password
      Nothing to set up. Uses Basic when the PBX allows it, else signs in as WMS
      does, with your 2FA code. The password is saved on this computer (0600),
-     so wx-admin can sign in again by itself; only a 2FA code is ever asked.
+     so wx-admin signs in again by itself when the PBX forgets the sign-in
+     (unused for 36 hours, or a restart); then only a 2FA code is asked.
 ```
 
 - **API key** (`--api-key`): before the hidden prompt, the steps: WMS → PBX → Integrations → Company API Keys, the
@@ -144,6 +152,8 @@ PBX       * mypbx.wildixin.com       serial 2211000000ef  admin · WMS sign-in  
 ```
 
 - Also shown: `WILDIX_PBX_API_KEY for <WILDIX_PBX_HOST>` when set (it wins, as today).
+- For a token sign-in the time shown is the earlier of `validUntil` and `lastUsed` + 36 h, as `until about …`, with
+  `(sooner if the PBX restarts)` in the help of `status`.
 - `--check`: one read per PBX (`GET /Dictionaries`), each line gets `accepted` or the refusal with its hint; a
   `password` access in mode `token` first tries Basic once (moving to it when the PBX now accepts it), else renews. Exit 1 when one is refused, as `--all-pbx`.
 - No PBX: `Not signed in to any PBX: wx-admin login <host>`. JSON: `{version, pbxs: [{host, port, serial, auth,
@@ -176,6 +186,7 @@ Saved in `admin/pbx/<host>.json` (0600, written atomically, as every access):
 ```json
 {"host": "...", "port": 443, "auth": "password", "username": "admin", "password": "...", "mode": "basic|token",
  "serial": "...", "refresh": "<refresh token>", "validUntil": "<ISO, the exp of the refresh token>",
+ "lastUsed": "<ISO, the last sign-in or renewal>",
  "accessToken": "<JWT>", "accessTokenExpires": "<ISO>"}
 ```
 
@@ -200,7 +211,8 @@ An access saved before as `auth: "basic"` (`pbx add --basic`) is read as `passwo
   refresh token (from `Set-Cookie`) and its expiry are saved at once. Long commands (`config copy`, `--all-pbx`) get a
   fresh header per request. A 401 from the API with a token that should still be valid (a clock that is off): one
   renewal and one retry.
-- **The refresh refused** (unused for 15 days, 7 for `admin`; a logout or a password change in WMS): first **Basic**,
+- **The refresh refused** (unused for 36 hours, a PBX restart, 15 days, 7 for `admin`; a logout or a password change
+  in WMS): first **Basic**,
   once (an administrator may have turned it on) → mode `basic`; else the token sign-in with the saved password, as in
   mode `basic`. Basic is tried again only here, at `login` and at `status --check`, never on every command (each
   failed attempt may count towards the lockout).
