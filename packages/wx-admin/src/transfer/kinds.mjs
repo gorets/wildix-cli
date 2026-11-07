@@ -14,6 +14,7 @@ function listed({group, label, path, scope, nameField, strip = [], item = (id) =
     listOf(await client.call('GET', path, undefined, {scope})).map((r) => ({
       id: String(r.id),
       name: String(r[nameField] ?? r.id),
+      ...(r.dn ? {dn: r.dn} : {}),
       data: without(r, [...RUNTIME, ...strip]),
     }));
   return {
@@ -48,7 +49,13 @@ const users = {
       const page = listOf(
         await client.call('GET', `/PBX/Colleagues/${query({count: PAGE, start})}`, undefined, {scope: 'colleagues'}),
       );
-      for (const u of page) out.push({id: String(u.id), name: String(u.extension), data: without(u, USER_BOUND)});
+      for (const u of page)
+        out.push({
+          id: String(u.id),
+          name: String(u.extension),
+          ...(u.dn ? {dn: u.dn} : {}),
+          data: without(u, USER_BOUND),
+        });
       if (page.length < PAGE) return out;
     }
   },
