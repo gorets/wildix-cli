@@ -87,6 +87,10 @@ How should wx-admin sign in to mypbx.wildixin.com?
      and the code again. The password is not saved. Needs a recent WMS.
 ```
 
+- Before the menu, one request that is not a sign-in attempt tells whether the PBX has the token sign-in (to be fixed
+  during the work against the test PBX and an older one: e.g. `GET /api/v1/auth/login/` → 405 there, 404 without).
+  Without it, item 2 is shown disabled with the reason ("this PBX's WMS does not offer it yet"), as the picker shows
+  disabled items, and item 1 is preselected.
 - **API key** (`--api-key`): before the hidden prompt, the steps: WMS → PBX → Integrations → Company API Keys, the
   scopes (`pbx:read` to read, `pbx:*` for changes and `config import`), that it is shown once. Then as `pbx add
   --api-key` today.
