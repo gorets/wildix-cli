@@ -395,6 +395,12 @@ The knowledge base of the cloud (WIM): knowledge bases, data sources, documents,
 | `wx-admin kb source clone <ds>` | a copy of a data source (its configuration, not its documents) |
 | `wx-admin kb source clean <ds> --yes` | remove the documents of a data source (needs --yes; the source and its configuration stay) |
 | `wx-admin kb source delete <ds>... --yes` | delete data sources (needs --yes) |
+| `wx-admin kb doc list <ds> [--search TEXT] [--status STATUS] [--limit N]` | the documents of a data source |
+| `wx-admin kb doc get <ds> <doc>` | one document with its content and chunks |
+| `wx-admin kb doc markdown <ds> <doc> [--to FILE]` | the text of a document as Markdown (to stdout, or to a new file) |
+| `wx-admin kb doc upload <ds> <file> [--title TEXT]` | upload a file as a document of a data source |
+| `wx-admin kb doc download <ds> <doc> --to FILE` | the original file of a document, to a new file |
+| `wx-admin kb doc delete <ds> <doc>... --yes` | delete documents of a data source (needs --yes) |
 
 ### wx-admin pbx
 

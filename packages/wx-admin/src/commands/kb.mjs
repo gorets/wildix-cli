@@ -6,14 +6,19 @@
 //   SearchKnowledgeBase, GenerateSearchAnswer, ListSearchQueriesHistory, ListHistoryStatistics;
 //   ListDataSources, GetDataSource, CreateDataSource, ConfigureDataSource, DescribeDataSource, StartSyncDataSource,
 //   StopSyncDataSource, GetDataSourceSyncStatus, ListDataSourceSynchronizationLogs, ListDataSourceStatistics,
-//   CloneDataSource, CleanDataSource, DeleteDataSource
+//   CloneDataSource, CleanDataSource, DeleteDataSource;
+//   ListDocuments, GetDocumentWithContentAndChunks, GetDocumentMarkdown, CreateDocument, GetDocumentUploadUrl,
+//   GetDocumentDownloadUrl, DeleteDocument (uploads and downloads go to presigned links, without the token)
+import path from 'node:path';
 import {UsageError} from 'wldx-core/errors';
+import {readForUpload} from 'wldx-core/files';
 import {apiPath} from 'wldx-core/http';
 import {localTime, oneLine, paint, table} from 'wldx-core/format';
 import {readSecret} from 'wldx-core/secret';
 import {cloudClient} from '../cloud/client.mjs';
 import {operationsOf} from '../cloud/specs.mjs';
 import {pickByName} from '../match.mjs';
+import {checkNewFile, writeNewFile} from './records.mjs';
 import {maskSecrets} from './trunk.mjs';
 
 const V1 = '/api/v1';
@@ -569,10 +574,141 @@ export const sourceCommands = {
   },
 };
 
+// ---------------------------------------------------------------------------------------------------------------------
+// Documents
+
+const docPath = (ds, doc) => `${V1}${apiPath`/data-sources/${ds}/documents/${doc}`}`;
+const docLine = (d) =>
+  `${d.title} (${d.id}) · ${d.status ?? ''}${d.originalFormat ? ` · ${d.originalFormat}` : ''}${d.chunksCount !== undefined ? ` · ${d.chunksCount} chunks` : ''}`;
+
+export const docCommands = {
+  list: {
+    summary: 'the documents of a data source',
+    usage: 'wx-admin kb doc list <ds> [--search TEXT] [--status STATUS] [--limit N]',
+    options: {
+      search: {type: 'string', placeholder: 'TEXT', description: 'only documents with this text in the title'},
+      status: {
+        type: 'string',
+        choices: ['draft', 'pending', 'processing', 'completed', 'failed'],
+        description: 'only this status',
+      },
+      limit: {type: 'string', placeholder: 'N', description: 'at most N documents'},
+    },
+    args: [1, 1],
+    async run(ctx) {
+      const v = ctx.values;
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      return client.call('GET', `${dsPath(d.id)}/documents`, {
+        query: {search: v.search, status: v.status, limit: whole(v.limit, 'limit')},
+      });
+    },
+    text: (r) => (r?.documents?.length ? r.documents.map(docLine) : 'No documents'),
+  },
+  get: {
+    summary: 'one document with its content and chunks',
+    usage: 'wx-admin kb doc get <ds> <doc>',
+    options: {},
+    args: [2, 2],
+    async run(ctx) {
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      const doc = await findDoc(client, d.id, ctx.positionals[1]);
+      return client.call('GET', `${docPath(d.id, doc.id)}/with-content-and-chunks`);
+    },
+    text: (r) => [docLine(r.document ?? {}), `${(r.chunks ?? []).length} chunks`, '', String(r.content ?? '')],
+  },
+  markdown: {
+    summary: 'the text of a document as Markdown (to stdout, or to a new file)',
+    usage: 'wx-admin kb doc markdown <ds> <doc> [--to FILE]',
+    options: {to: {type: 'string', placeholder: 'FILE', description: 'write it to this file (which must not exist)'}},
+    args: [2, 2],
+    async run(ctx) {
+      if (ctx.values.to) checkNewFile(ctx, ctx.values.to);
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      const doc = await findDoc(client, d.id, ctx.positionals[1]);
+      const markdown = (await client.call('GET', `${docPath(d.id, doc.id)}/markdown`))?.markdown ?? '';
+      if (!ctx.values.to) return {markdown};
+      return {file: writeNewFile(ctx, ctx.values.to, markdown), bytes: Buffer.byteLength(markdown)};
+    },
+    text: (r) => (r.file ? `Wrote ${r.file} (${r.bytes} bytes)` : r.markdown.replace(/\n$/, '')),
+  },
+  upload: {
+    summary: 'upload a file as a document of a data source',
+    usage: 'wx-admin kb doc upload <ds> <file> [--title TEXT]',
+    options: {title: {type: 'string', placeholder: 'TEXT', description: 'the title (default: the file name)'}},
+    args: [2, 2],
+    async run(ctx) {
+      const file = path.resolve(ctx.cwd ?? process.cwd(), ctx.positionals[1]);
+      const bytes = readForUpload(file, ctx.env); // no credentials, nothing hidden in the home folder: before anything is made
+      const name = path.basename(file);
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      const body = {
+        title: ctx.values.title ?? name.replace(/\.[^.]+$/, ''),
+        originalName: name,
+        originalFormat: path.extname(name).slice(1).toLowerCase(),
+      };
+      const made = await client.call('POST', `${dsPath(d.id)}/documents`, {json: body});
+      const doc = made?.document ?? made;
+      if (!doc?.id) throw new Error('The knowledge base did not answer the new document');
+      const {uploadUrl} = (await client.call('GET', `${docPath(d.id, doc.id)}/upload-url`)) ?? {};
+      if (!uploadUrl) throw new Error(`No upload link for the document ${doc.id}`);
+      const res = await client.raw('PUT', uploadUrl, {body: bytes});
+      if (!res.ok)
+        throw new Error(`The upload of ${name} failed (${res.status}); the document ${doc.id} waits for its file`);
+      return {...doc, uploaded: bytes.length};
+    },
+    text: (d) => `Uploaded ${d.title} (${d.id}, ${d.uploaded} bytes): it is processed now (wx-admin kb doc list)`,
+  },
+  download: {
+    summary: 'the original file of a document, to a new file',
+    usage: 'wx-admin kb doc download <ds> <doc> --to FILE',
+    options: {to: {type: 'string', placeholder: 'FILE', description: 'the new file'}},
+    args: [2, 2],
+    async run(ctx) {
+      if (!ctx.values.to) throw new UsageError('--to is needed', ctx.usage());
+      checkNewFile(ctx, ctx.values.to);
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      const doc = await findDoc(client, d.id, ctx.positionals[1]);
+      const {downloadUrl} = (await client.call('GET', `${docPath(d.id, doc.id)}/download-url`)) ?? {};
+      if (!downloadUrl) throw new Error(`No download link for the document ${doc.id}`);
+      const res = await client.raw('GET', downloadUrl);
+      if (!res.ok) throw new Error(`The download failed (${res.status})`);
+      const data = Buffer.from(await res.arrayBuffer());
+      return {file: writeNewFile(ctx, ctx.values.to, data), bytes: data.length};
+    },
+    text: (r) => `Wrote ${r.file} (${r.bytes} bytes)`,
+  },
+  delete: {
+    summary: 'delete documents of a data source (needs --yes)',
+    usage: 'wx-admin kb doc delete <ds> <doc>... --yes',
+    options: {yes: {type: 'boolean', description: 'yes, delete them'}},
+    args: [2, 51],
+    async run(ctx) {
+      if (!ctx.values.yes)
+        throw new UsageError('Deleting a document cannot be undone: confirm with --yes', ctx.usage());
+      const client = await kbClient(ctx);
+      const d = await findSource(client, ctx.positionals[0]);
+      const found = [];
+      for (const ref of ctx.positionals.slice(1)) found.push(await findDoc(client, d.id, ref));
+      for (const doc of found) await client.call('DELETE', docPath(d.id, doc.id));
+      return {deleted: found.map(({id, title}) => ({id, title}))};
+    },
+    text: (r) => `Deleted ${r.deleted.map((d) => `${d.title} (${d.id})`).join(', ')}`,
+  },
+};
+
 export const groups = {
   kb: {
     summary: 'the knowledge base of the cloud (WIM): knowledge bases, data sources, documents, search, answers',
-    commands: {...kbCommands, source: {summary: 'the data sources of the knowledge bases', commands: sourceCommands}},
+    commands: {
+      ...kbCommands,
+      source: {summary: 'the data sources of the knowledge bases', commands: sourceCommands},
+      doc: {summary: 'the documents of the data sources', commands: docCommands},
+    },
   },
 };
 
