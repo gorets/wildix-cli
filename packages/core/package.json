@@ -1,6 +1,6 @@
 {
   "name": "wldx-core",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "The shared core of wx (wldx-cli) and wx-admin (wldx-admin-cli): router, output, completion, Wildix login, file checks",
   "keywords": [
     "wildix",

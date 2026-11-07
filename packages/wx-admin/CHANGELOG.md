@@ -15,6 +15,13 @@
 - Found: the knowledge base answers the API token of a Confluence data source in clear text (`ListDataSources`,
   `GetDataSource`); `wx-admin` masks it.
 
+## 1.2.1 — 2026-11-07
+
+- `wx-admin` says when a newer version is on npm (once a day, one line after the command; `WX_NO_UPDATE_CHECK=1`
+  turns it off).
+
+## 1.2.0 — 2026-11-07
+
 - `wx-admin config export | import | copy`: carry a chosen part of the configuration to another PBX without
   anything bound to the source (LDAP ids, the serial, passwords), unlike a WMS backup restored elsewhere. A list to
   tick (an object brings what it needs), references kept by name and turned into the ids of the target, a plan
@@ -27,6 +34,7 @@
   `wcgrp` is unique per PBX; the PBX answers `0` or `"0"` for the same value; the dialplan database has no list of
   its families. Only with tests: users, trunks, trunk groups and price lists written to a PBX; `copy` between two
   PBX.
+
 ## 1.1.0 — 2026-11-07
 
 - The first published version. It starts at 1.1.0, the version of `wx` and of their shared core: the three are

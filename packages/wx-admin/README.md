@@ -1,6 +1,6 @@
 # wldx-admin-cli — `wx-admin`, an admin command line for the Wildix PBX
 
-**Version 1.1.0** · unofficial · MIT
+**Version 1.2.1** · unofficial · MIT
 
 `wx-admin` manages a Wildix PBX through its REST API (`https://<pbx>/api/v1`): the system and its settings, users,
 ACL, queues, dialplans and the objects they use (timetables, IVR, switches, paging, the dialplan database), trunks,
@@ -472,6 +472,13 @@ Your profiles (the e-mails you are logged in with) and the default one.
 As in the internal Wildix CLI: text for people by default, `--output json` for scripts and agents (the answer of the
 PBX, `{"type":"result","result":X}` unwrapped to X), `--pretty`, `--no-color`; they may stand anywhere. Messages for
 people (notes, prompts) go to stderr.
+
+## Updates
+
+Once a day, while a command runs in a terminal, `wx-admin` asks npm for its latest version (in the background, never
+holding the command); when there is a newer one, a line after the output says so (`npm i -g wldx-admin-cli`).
+Nothing is installed by itself. Off in CI, under `npx`, without a terminal, with `--output json`, or with
+`WX_NO_UPDATE_CHECK=1`.
 
 ## Exit codes
 
