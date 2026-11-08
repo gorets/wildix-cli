@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.0 — 2026-11-08
+
+- Nothing of its own: released with `wx-admin` 1.7.0 (`wx-admin kite`) and `wldx-core` 1.7.0.
+
 ## 1.6.0 — 2026-11-08
 
 - Nothing of its own: released with `wx-admin` 1.6.0 (`wx-admin integration`) and `wldx-core` 1.6.0.

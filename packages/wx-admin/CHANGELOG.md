@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.0 — 2026-11-08
 
 - Added: `wx-admin kite`, Kite (the chat widgets x-bees puts on websites) and the customer messaging channels of the
   company, with the PBX's cloud token. `services`: the services (call groups) conversations can go to. `widget
