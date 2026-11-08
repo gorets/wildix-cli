@@ -1,6 +1,6 @@
 # wldx-admin-cli — `wx-admin`, an admin command line for the Wildix PBX
 
-**Version 1.7.0** · unofficial · MIT
+**Version 1.8.0** · unofficial · MIT
 
 `wx-admin` manages a Wildix PBX through its REST API (`https://<pbx>/api/v1`): the system and its settings, users,
 ACL, queues, dialplans and the objects they use (timetables, IVR, switches, paging, the dialplan database), trunks,

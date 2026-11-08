@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.0 — 2026-11-08
+
+- Nothing of its own: released with `wx-admin` 1.8.0 (the company cloud in `config export|import|copy`,
+  `system network`), one version for the three.
+
 ## 1.7.0 — 2026-11-08
 
 - Nothing of its own: released with `wx-admin` 1.7.0 (`wx-admin kite`), one version for the three.

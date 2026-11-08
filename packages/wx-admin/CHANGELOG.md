@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.8.0 — 2026-11-08
 
 - Added: `wx-admin config export|import|copy` carry the cloud of the company besides the PBX configuration. Kinds, by
   group. Wilma: agents, skills with their files, tools, connectors, secrets, shared connections. Knowledge base: data
@@ -34,9 +34,17 @@
 - Checked live (stage): the export of a company with every cloud kind (agents, skills with a file, tools, connectors,
   secrets, connections, KB sources and bases, HTTP webhooks, apps, CRM settings, widgets and SMS numbers): no secret
   value in the folder, Nango-bound sources left out, user references found in the Stream directory (it matches
-  e-mails in any case and answers the users of every company). Only with tests: the plan and every write of an import
-  or copy (the round trip on a test PBX is pending), the writes of the Kite channels and of the CRM settings.
-- Added: `wx-admin system network`: the PBXs of the WMS network of this PBX (host, serial, version, server or member, failover, update needed), the current one marked; a lone PBX says it is not in a network. `--output json` gives the records as the PBX answers (with `ip` and `dn`). A 403 or 404 says the WMS network is not available with this access: a 403 keeps the scope hint and exits 2, a 404 exits 1. The endpoint, `GET /Network/Pbxes`, is not in the public OpenAPI (probed live; scope `pbx`, a guess).
+  e-mails in any case and answers the users of every company). On a test PBX, temporary objects of every writable
+  kind but the channels and the CRM settings (a secret, a tool with a custom header, a skill with a file, a KB source
+  and base, an agent using them, a webhook, a widget): export, delete, import, and a new plan saying every one is the
+  same; an agent changed by hand put back with `--overwrite`, with and without a newer published version. Only with
+  tests: the writes of the Kite channels and of the CRM settings (none on the test PBX).
+- Added: `wx-admin system network`: the PBXs of the WMS network of this PBX (host, serial, version, server or member,
+  failover, update needed), the current one marked; a lone PBX says it is not in a network. `--output json` gives the
+  records as the PBX answers (with `ip` and `dn`). A 403 or 404 says the WMS network is not available with this access:
+  a 403 keeps the scope hint and exits 2, a 404 exits 1. The endpoint, `GET /Network/Pbxes`, is not in the public
+  OpenAPI (probed live; scope `pbx`, a guess).
+  Checked live (stage): two PBXs, each a network of one.
 
 ## 1.7.0 — 2026-11-08
 
