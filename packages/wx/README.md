@@ -1,6 +1,6 @@
 # wldx-cli — `wx`, a command line for Wildix
 
-**Version 1.4.1** · unofficial · MIT
+**Version 1.5.0** · unofficial · MIT
 
 `wx` works with Wildix as **the logged-in user**: chats, calls and meetings on record, queue reports, what is going
 on now, and your phone. It is the command-line twin of the

@@ -1,41 +1,38 @@
 # Changelog
 
-## 1.5.0 — unreleased
+## 1.5.0 — 2026-11-08
 
 - Added: `wx-admin wilma`, Wilma (the agent platform of the Wildix cloud) for the company of the PBX, with the PBX's
   cloud token. `agent`, `skill`, `tool`: list, get (the draft or `--version N`), export (a new file; a skill: a new
   folder with `skill.json` and its files), create from an export, update (from an export and/or flags such as
-  `--instructions FILE`; the `revision` read is sent; an export older than the last change, or of another object, is refused), versions,
-  diff (default: the latest version against the draft), publish, restore (`--yes`), delete (`--yes`, and `--force`
-  when agents use the object). Agents also: `deploy <agent> <version>[=PERCENT]... --yes` (or `--reset`), and their
-  API keys (`keys`, `key-create`: the secret is printed once, `key-delete`). `connector`: catalog (deprecated
-  definitions only with `--all`), definition, list, get, export, create, update, delete. `secret`: list, get, create
-  and rotate (the value typed hidden or piped, never an option), update, delete; never a value. `connection`: list,
-  get (the owner of a user connection only with `--full`), verify, delete. `audit list|get|uses` (who changed what,
-  who uses an object), `trace list|get|model-call` (callers' numbers and names only with `--full`), `usage` (tokens, call seconds, sessions, errors by service,
-  agent or channel). Objects by id or exact name; a name several objects share asks for the id. Answers are masked
-  unless `--show-secrets`; a file with masked values, even a masked token inside a URL, is refused by `create` and
-  `update` (it would write the mask over a secret). A skill folder holds its files: no links, no hidden paths. Not here: deprecated operations, voicebots and WIM tools (the legacy stack), sandbox and the
-  copilot library (later), running tools, per-user runtime: `wx-admin cloud wilma <operation>`.
+  `--instructions FILE`; the `revision` read is sent; an export older than the last change, or of another object, is
+  refused), versions, diff (default: the latest version against the draft), publish, restore (`--yes`), delete
+  (`--yes`, and `--force` when agents use the object). Agents also: `deploy <agent> <version>[=PERCENT]... --yes` (or
+  `--reset`), and their API keys (`keys`, `key-create`: the secret is printed once, `key-delete`). `connector`:
+  catalog (deprecated definitions only with `--all`), definition, list, get, export, create, update, delete. `secret`:
+  list, get, create and rotate (the value typed hidden or piped, never an option), update, delete; never a value.
+  `connection`: list, get (the owner of a user connection only with `--full`), verify, delete. `audit list|get|uses`
+  (who changed what, who uses an object), `trace list|get|model-call` (callers' numbers and names only with `--full`),
+  `usage` (tokens, call seconds, sessions, errors by service, agent or channel). Objects by id or exact name; a name
+  several objects share asks for the id. Answers are masked unless `--show-secrets`; a file with masked values, even a
+  masked token inside a URL, is refused by `create` and `update` (it would write the mask over a secret). A skill
+  folder holds its files: no links, no hidden paths. Not here: deprecated operations, voicebots and WIM tools (the
+  legacy stack), sandbox and the copilot library (later), running tools, per-user runtime: `wx-admin cloud wilma
+  <operation>`.
 - Checked live on the stage of two test PBXs: every read on a company with Wilma objects (agents, versions,
   deployment, skills, tools, connectors, catalog, secrets, connections, audit, traces, usage); on the other, with
-  temporary objects deleted after: a secret (create, update, rotate), an agent (create from an export, publish
-  twice, update with `--instructions -`, diff, deploy 70/30 then 100, a stale export refused, restore, API key
-  created and deleted), a skill with a file (created from a folder, exported back byte for byte, publish, delete
-  refused while an agent used it), a tool and a connector (create, update, publish; delete refused while an agent
-  used the connector). Only with tests: `--show-secrets` exports, deploy `--reset`, `connection verify` and
-  `delete`, `trace model-call`.
-
-## 1.4.1 — 2026-11-08
-
+  temporary objects deleted after: a secret (create, update, rotate), an agent (create from an export, publish twice,
+  update with `--instructions -`, diff, deploy 70/30 then 100, a stale export refused, restore, API key created and
+  deleted), a skill with a file (created from a folder, exported back byte for byte, publish, delete refused while an
+  agent used it), a tool and a connector (create, update, publish; delete refused while an agent used the connector).
+  Only with tests: `--show-secrets` exports, deploy `--reset`, `connection verify` and `delete`, `trace model-call`.
 - Fixed: the masking of the cloud answers hid what only names or points to a secret. `wx-admin cloud wilma
-  ListSecrets` showed `"secrets": "********"` in place of the list of secrets (names and metadata: Wilma never
-  returns their values), and a connector showed its definition (`hubspot`) as `********`. Now visible: Wilma secret
-  records and references (`{id}`), connection references, the metadata of an agent API key, the authorization modes
-  and scopes of a connector, a `key` that names a thing (`{key, version}`, `{id, key}`), ids, types and statuses.
-  Still masked: passwords, tokens, API keys, client secrets, the secret of a new agent API key, service account
-  credentials (whole), secret header values, custom headers, sandbox environment values, and any `value` inside a
-  field named as a secret.
+  ListSecrets` showed `"secrets": "********"` in place of the list of secrets (names and metadata: Wilma never returns
+  their values), and a connector showed its definition (`hubspot`) as `********`. Now visible: Wilma secret records
+  and references (`{id}`), connection references, the metadata of an agent API key, the authorization modes and scopes
+  of a connector, a `key` that names a thing (`{key, version}`, `{id, key}`), ids, types and statuses. Still masked:
+  passwords, tokens, API keys, client secrets, the secret of a new agent API key, service account credentials (whole),
+  secret header values, custom headers, sandbox environment values, and any `value` inside a field named as a secret.
 - Fixed: the changes of `CompareAgentVersions`, `CompareToolVersions` and the audit log (`{path, before, after}`)
   showed a secret value when its path named one (a custom header, an SQS key): both sides are now masked. A `key`
   inside a field named as a secret is masked even next to a name.

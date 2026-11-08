@@ -1,6 +1,6 @@
 # wldx-admin-cli — `wx-admin`, an admin command line for the Wildix PBX
 
-**Version 1.4.1** · unofficial · MIT
+**Version 1.5.0** · unofficial · MIT
 
 `wx-admin` manages a Wildix PBX through its REST API (`https://<pbx>/api/v1`): the system and its settings, users,
 ACL, queues, dialplans and the objects they use (timetables, IVR, switches, paging, the dialplan database), trunks,
@@ -149,6 +149,12 @@ wx-admin kb list                                     # knowledge bases and their
 wx-admin kb ask "How do I upgrade a phone?" --kb Support
 wx-admin kb source sync "Public Confluence" --full
 wx-admin kb doc upload Manuals ./guide.pdf
+wx-admin wilma agent list                            # the agents of the company
+wx-admin wilma agent export Support --to support.json
+wx-admin wilma agent update Support --instructions ./instructions.md
+wx-admin wilma agent publish Support --changelog "New greeting"
+wx-admin wilma agent deploy Support 7=90 6=10 --yes  # 90% of new sessions on v7
+wx-admin wilma audit uses wilma://skills/<id>        # which agents use a skill
 wx-admin cloud wilma                                 # every operation of Wilma that takes the token
 wx-admin cloud voicebots ListVoiceBots               # any operation, checked against the bundled OpenAPI
 ```

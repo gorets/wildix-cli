@@ -1,8 +1,9 @@
 # Changelog
 
-## 1.4.1 — 2026-11-08
+## 1.5.0 — 2026-11-08
 
-- Nothing of its own: released with `wx-admin` 1.4.1 (the masking of the cloud answers) and `wldx-core` 1.4.1.
+- Nothing of its own: released with `wx-admin` 1.5.0 (`wx-admin wilma`, the masking of the cloud answers) and
+  `wldx-core` 1.5.0.
 
 ## 1.4.0 — 2026-11-07
 

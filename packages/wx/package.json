@@ -1,6 +1,6 @@
 {
   "name": "wldx-cli",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Unofficial command line for Wildix (x-bees chats and more), acting as the logged-in user",
   "keywords": [
     "wildix",

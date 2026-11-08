@@ -24,6 +24,10 @@ src/commands/status.mjs  the PBX signed in to, how, until when; --check
 src/match.mjs            an object by name or id, refusing names that match several
 src/cloud/               the cloud services with the CPA token: env (services, base URLs), token (from the PBX, in
                          memory), client (only to the service), specs (the OpenAPI in specs/ as operation tables)
+src/wilma/               Wilma: api (the kinds of objects, their paths and create fields, paged lists, by id or
+                         name, who uses an object), versioned (the commands of a kind: list … delete, versions,
+                         diff, publish, restore), skills (export to a folder, create from it); the group is
+                         src/commands/wilma.mjs
 src/transfer/            config export/import/copy: kinds (read, write), refs (markers, safety scan), folder
                          (JSON Lines), selection, plan, apply (ordered writes), next-steps, log, run (the import flow)
 test/*.test.mjs          node:test against a fake PBX (fetch is injected); test/helpers.mjs: run(), fakeFetch(), fakeJwt(),
@@ -52,6 +56,14 @@ test/*.test.mjs          node:test against a fake PBX (fetch is injected); test/
   secret shape of a service is one rule there, with its test.
   `specs/*.openapi.json` are made by `tools/fetch-cloud-specs.mjs` (run by hand, reviewed). A command of the
   knowledge base names the operations it uses in the comment of `src/commands/kb.mjs`.
+- **Wilma** (`src/wilma/`): lists are paged (`limit` ≤ 100, `cursor`); never send `company` (the token names it). A
+  new kind is one entry of `KINDS`; its URI in the audit log is `wilma://<uri>/<id>` (a connector:
+  `wilma://tools/connectors/<id>`). An update sends the `revision` read; an export carries the object's `id` and
+  `revision`, and `create`/`update` refuse a file holding the mask anywhere (it would overwrite a secret). Delete
+  needs `--yes`, and `--force` when something uses the object; `deploy` and `restore` need `--yes`. A secret value is
+  typed hidden or piped, never an option or an answer; the secret of a new agent API key is printed once, unmasked.
+  Personal data (the owner of a user connection, callers in traces) only with `--full`. Deprecated operations and
+  the legacy stack (voicebots, WIM tools) get no `wilma` command.
 - **Config transfer:** a reference between objects is a marker (`$ref`, `$self`, `$secret`, `$external`), never
   an id of the source; a new reference site of a dialplan application is one line of `APP_REFS` (src/transfer/
   refs.mjs).

@@ -1,6 +1,6 @@
 # wldx-core
 
-**Version 1.4.1** · unofficial · MIT
+**Version 1.5.0** · unofficial · MIT
 
 The shared core of the unofficial Wildix command lines [`wx`](https://www.npmjs.com/package/wldx-cli) and
 [`wx-admin`](https://www.npmjs.com/package/wldx-admin-cli): the router (global options anywhere, text or JSON
