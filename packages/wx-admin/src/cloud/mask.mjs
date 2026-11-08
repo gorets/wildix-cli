@@ -5,7 +5,10 @@
 // references, API key metadata, the authorization modes of a connector, a key that names a thing ({key, version},
 // {id, key}), ids, types, scopes and statuses. A whole object is hidden only for service account credentials;
 // any other object under a secret name is walked, its secret fields masked by name and every `value` in it masked.
-// The shapes come from the OpenAPI of the knowledge base, WIM voicebots, WIM tools and Wilma (specs/).
+// A `key` next to a `secret` is the other half of a key pair (an SQS webhook of WIM integrations), and a
+// `connectionId` next to a `providerConfigKey` is a Nango connection: whoever holds its id can bind that CRM.
+// The shapes come from the OpenAPI of the knowledge base, WIM voicebots, WIM tools and Wilma (specs/), and from the
+// answers of the WIM console API (wx-admin integration).
 export const MASK = '********';
 
 const SECRET = /secret|password|passwd|^register$|^key$|api_?key|token|credentials|private_?key|authorization|cookie/i;
@@ -24,7 +27,7 @@ const isSecretKey = (k) => SECRET.test(k) && !PAGING.test(k) && !DESCRIBES.test(
 const hide = (v) => (v === null || v === undefined || v === '' ? v : MASK);
 
 function secretString(k, v, siblings, inSecret) {
-  if (/^key$/i.test(k) && !inSecret && NAMING.some((n) => n in siblings)) return false;
+  if (/^key$/i.test(k) && !inSecret && !('secret' in siblings) && NAMING.some((n) => n in siblings)) return false;
   if (/^authorization$/i.test(k) && AUTH_STATUS.test(v)) return false;
   return true;
 }
@@ -71,6 +74,7 @@ export function maskCloud(value, key = '', inSecret = false) {
       Object.entries(value).map(([k, v]) => {
         if (isSecretKey(k) && WHOLE.test(k) && v && typeof v === 'object') return [k, MASK]; // a service account
         if (isSecretKey(k) && typeof v === 'string' && secretString(k, v, value, inSecret)) return [k, hide(v)];
+        if (k === 'connectionId' && 'providerConfigKey' in value && typeof v === 'string') return [k, hide(v)];
         if (inSecret && /^value$/i.test(k) && typeof v === 'string') return [k, hide(v)];
         return [k, maskCloud(v, k, inSecret || (isSecretKey(k) && v !== null && typeof v === 'object'))];
       }),

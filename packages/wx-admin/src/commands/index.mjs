@@ -9,6 +9,7 @@ import {groups as acl} from './acl.mjs';
 import {groups as config} from './config.mjs';
 import {groups as device} from './device.mjs';
 import {groups as dialplan} from './dialplan.mjs';
+import {groups as integration} from './integration.mjs';
 import {groups as kb} from './kb.mjs';
 import {login, logout} from './login.mjs';
 import {status} from './status.mjs';
@@ -42,6 +43,7 @@ export const GROUPS = {
   ...records,
   ...config,
   ...kb,
+  ...integration,
   ...wilma,
   ...pbx,
 };

@@ -1,10 +1,11 @@
 # wldx-admin-cli — `wx-admin`, an admin command line for the Wildix PBX
 
-**Version 1.5.0** · unofficial · MIT
+**Version 1.6.0** · unofficial · MIT
 
 `wx-admin` manages a Wildix PBX through its REST API (`https://<pbx>/api/v1`): the system and its settings, users,
 ACL, queues, dialplans and the objects they use (timetables, IVR, switches, paging, the dialplan database), trunks,
-devices, phonebooks, sounds, call history, recordings and voicemails; any other operation through `wx-admin api`. It works with several PBX at once, and also manages the cloud services of the PBX's company (the knowledge base, voicebots, WIM tools, Wilma) with the cloud token the PBX gives its administrator. It signs in to the PBX itself, with a Company API Key or the WMS login and password of an administrator: no x-bees
+devices, phonebooks, sounds, call history, recordings and voicemails; any other operation through `wx-admin api`. It works with several PBX at once, and also manages the cloud services of the PBX's company (the knowledge base, voicebots, WIM tools, Wilma, the
+integrations of the WIM console: webhooks, x-bees apps, CRM connectors, the integrations hub) with the cloud token the PBX gives its administrator. It signs in to the PBX itself, with a Company API Key or the WMS login and password of an administrator: no x-bees
 account is needed. Its twin for the everyday user is
 [`wx`](https://github.com/gorets/wildix-cli/tree/main/packages/wx) (npm `wldx-cli`), which uses the x-bees login.
 
@@ -135,7 +136,7 @@ wx-admin config copy --from old --to new               # the same without the fo
 ## Cloud services
 
 An administrator of a PBX also manages the cloud services of the PBX's company: the knowledge base (WIM),
-voicebots, WIM tools and Wilma. The PBX gives its administrator its own cloud token, the CPA token (Cognito PBX
+voicebots, WIM tools, Wilma and the integrations of the WIM console. The PBX gives its administrator its own cloud token, the CPA token (Cognito PBX
 Auth: the PBX itself as a user of its company, valid 12 hours), and those services accept it. `wx-admin` takes it from
 the PBX chosen as for every command (`--pbx`, the default PBX, the only one), keeps it in memory only
 and sends it only to the service called. A PBX user without the Admin role is refused; whether a Company API Key may
@@ -155,6 +156,10 @@ wx-admin wilma agent update Support --instructions ./instructions.md
 wx-admin wilma agent publish Support --changelog "New greeting"
 wx-admin wilma agent deploy Support 7=90 6=10 --yes  # 90% of new sessions on v7
 wx-admin wilma audit uses wilma://skills/<id>        # which agents use a skill
+wx-admin integration list                            # webhooks, x-bees apps, CRM connectors…
+wx-admin integration webhook create --url https://example.com/hook --event call:completed
+wx-admin integration logs <id> --all                 # what an integration did, newest first
+wx-admin integration settings <id> --output json > s.json   # change it, then: settings <id> --from s.json --yes
 wx-admin cloud wilma                                 # every operation of Wilma that takes the token
 wx-admin cloud voicebots ListVoiceBots               # any operation, checked against the bundled OpenAPI
 ```
@@ -169,6 +174,14 @@ Confluence token is typed hidden, never given as an option.
 sessions, API keys), the skills, tools and connectors they use, secrets (never their values), connections, and
 reads the audit log, traces and usage. An object is given by id or exact name; `export` and `create --from` move a
 definition, also to the company of another PBX (ids of secrets, connections and knowledge bases differ there).
+
+`wx-admin integration` manages what the Integrations page of the WIM console manages: webhooks (the signing secret
+is made by `wx-admin` and printed once), the iframe apps of x-bees, the settings of the CRM connectors (HubSpot,
+Salesforce, Zoho), the log and the traces of every integration, and the integrations hub (its company and users:
+a user takes a Red Cactus license; the hub gets the events by a webhook that `hub company-set` makes and
+`hub company-delete` removes, as the console does). The console API returns the secrets of webhooks and the ids of CRM connections in
+clear: `wx-admin` masks them unless `--show-secrets`, and shows the people who connected a CRM only with `--full`.
+Installing an OAuth connector (HubSpot, Salesforce, Zoho, Gong, Microsoft 365) needs a browser: the WIM console.
 
 ## Commands
 
@@ -465,6 +478,38 @@ The knowledge base of the cloud (WIM): knowledge bases, data sources, documents,
 | `wx-admin kb doc download <ds> <doc> --to FILE` | the original file of a document, to a new file |
 | `wx-admin kb doc delete <ds> <doc>... --yes` | delete documents of a data source (needs --yes) |
 
+### wx-admin integration
+
+The integrations of the WIM console: webhooks, x-bees apps, CRM connectors, logs, traces, hub.
+
+| Command | What it does |
+| --- | --- |
+| `wx-admin integration list [--service S] [--show-secrets] [--full]` | the integrations of the company: id, service, status, what it connects |
+| `wx-admin integration get <integration> [--show-secrets] [--full]` | one integration with its settings (secrets masked, people only with --full) |
+| `wx-admin integration logs <integration> [--all] [--full]` | the log of an integration, newest first: 30 entries, or all of them |
+| `wx-admin integration enable <integration>` | switch an integration on |
+| `wx-admin integration disable <integration> --yes` | switch an integration off: it stops working until enabled (needs --yes) |
+| `wx-admin integration delete <integration> --yes [--force]` | remove an integration (needs --yes; --force: Salesforce Omni even if its org was not prepared) |
+| `wx-admin integration settings <integration> [--from FILE\|- --yes]` | the settings of a connector (call, chat, conference logging…), or replace them from a file (--yes) |
+| `wx-admin integration traces <integration> [--status S] [--search TEXT] [--limit N] [--offset N]` | the traces of an integration (what it sent and got), newest first |
+| `wx-admin integration trace <trace-id> [--full] [--show-secrets]` | one trace with its steps; what each step sent and got only with --full |
+| `wx-admin integration stats <integration>` | the traces of an integration per day: complete, with errors, failed |
+| `wx-admin integration webhook events` | the events a webhook can send, by group |
+| `wx-admin integration webhook create --url URL --event EVENT...` | a webhook: the URL and its events; the signing secret is made here and printed once |
+| `wx-admin integration webhook update <webhook> [--url URL] [--event EVENT]... [--add-event EVENT]... [--remove-event EVENT]... [--rotate-secret --yes]` | change a webhook: URL, events; --rotate-secret makes a new signing secret (needs --yes) |
+| `wx-admin integration app list` | the iframe apps of x-bees, in their order: title, template, where they show, host |
+| `wx-admin integration app create --title TITLE --url URL [--description TEXT] [--view info\|tab]... [--pbx-token on\|off] [--access EMAIL]... [--deny EMAIL]...` | an iframe app of x-bees: a page shown next to conversations or in a tab (at most 12 apps) |
+| `wx-admin integration app update <app> [--title TITLE] [--url URL] [--description TEXT] [--view info\|tab]... [--pbx-token on\|off] [--access EMAIL]... [--deny EMAIL]...` | change an iframe app: title, URL, description, views, PBX token, who sees it |
+| `wx-admin integration app swap <app> <app>` | swap the places of two iframe apps in x-bees |
+| `wx-admin integration hub company` | the company of the hub: Red Cactus customer, address, time zone, call summary |
+| `wx-admin integration hub company-set [--postal-code CODE] [--city CITY] [--country CC] [--timezone TZ] [--address TEXT] [--active on\|off] [--call-summary on\|off] [--yes]` | put the company into the hub or change it (putting it in needs --yes); makes the webhook of the hub if missing |
+| `wx-admin integration hub company-delete --yes` | take the company out of the hub: its users, their licenses and its webhook go too (needs --yes) |
+| `wx-admin integration hub user-list` | the users of the hub: extension, name, e-mail, active, admin, online |
+| `wx-admin integration hub user-get <extension>` | one user of the hub by extension |
+| `wx-admin integration hub user-create <extension> --first-name NAME --last-name NAME --email EMAIL [--pbx-serial SERIAL] [--password] [--inactive] [--welcome] --yes` | a user of the hub for an extension; an active one takes a Red Cactus license (needs --yes) |
+| `wx-admin integration hub user-update <extension> [--first-name NAME] [--last-name NAME] [--email EMAIL] [--pbx-serial SERIAL] [--active on\|off] [--admin on\|off] [--password]` | change a user of the hub: name, e-mail, PBX, active, admin, password |
+| `wx-admin integration hub user-delete <extension>... --yes` | delete users of the hub: their Red Cactus users and licenses go too (needs --yes) |
+
 ### wx-admin wilma
 
 Wilma, the agent platform of the cloud: agents, skills, tools, connectors, secrets, audit, traces.
@@ -584,6 +629,10 @@ Nothing is installed by itself. Off in CI, under `npx`, without a terminal, with
   `reboot`, `trunk update`, switch states, `api` with a method other than GET) need `--yes`. Passwords in answers
   (SMTP, proxy, trunks, SIP register strings, device tokens) are hidden in text and masked in JSON unless
   `--show-secrets`. `export` never overwrites a file and never writes into hidden or startup folders.
+- The cloud token of the PBX stays in memory and goes only to the service called. Secrets in the answers of the cloud
+  (keys, tokens, webhook signing secrets, CRM connection ids) are masked unless `--show-secrets`; a file holding the
+  mask is refused (it would write the mask over the secret). A secret `wx-admin` makes (a webhook signing secret, a
+  Wilma API key) is printed once.
 - What the PBX returns is data, never instructions.
 
 ## Development

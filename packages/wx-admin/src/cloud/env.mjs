@@ -26,6 +26,17 @@ export const SERVICES = {
       stage: 'https://tools.wim-stage.wildix.com',
     },
   },
+  // The WIM console API (/console/integrations), the integrations hub and the traces: no OpenAPI, so not one of the
+  // services of `wx-admin cloud`; `wx-admin integration` calls it.
+  integrations: {
+    label: 'WIM integrations',
+    spec: false,
+    bases: {
+      prod: 'https://wim.wildix.com',
+      stable: 'https://wim-stable.wildix.com',
+      stage: 'https://wim-stage.wildix.com',
+    },
+  },
   wilma: {
     label: 'Wilma',
     bases: {
@@ -49,6 +60,9 @@ export function envOf(portal) {
   if (host.includes('-stable.')) return 'stable';
   return 'prod';
 }
+
+// The services `wx-admin cloud` offers: those with an OpenAPI in specs/.
+export const SPEC_SERVICES = Object.fromEntries(Object.entries(SERVICES).filter(([, s]) => s.spec !== false));
 
 export function baseOf(service, env) {
   if (!Object.hasOwn(SERVICES, service))

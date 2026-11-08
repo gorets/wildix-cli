@@ -6,7 +6,7 @@ import {AuthError, UsageError} from 'wldx-core/errors';
 import {clean, paint} from 'wldx-core/format';
 import {program, setProgram} from 'wldx-core/program';
 import {COMMANDS, GLOBAL_OPTIONS, GROUPS} from './commands/index.mjs';
-import {SERVICES} from './cloud/env.mjs';
+import {SPEC_SERVICES} from './cloud/env.mjs';
 import {savedPbxs} from './pbx.mjs';
 import {VERSION} from './version.mjs';
 
@@ -62,7 +62,7 @@ export const SPEC = {
   },
   // The PBX with saved access, by host and by serial.
   completers: {
-    cloudServices: () => Object.entries(SERVICES).map(([name, s]) => [name, s.label]),
+    cloudServices: () => Object.entries(SPEC_SERVICES).map(([name, s]) => [name, s.label]),
     pbxs: (env) => savedPbxs(env).flatMap((p) => [[p.host, p.auth], ...(p.serial ? [[p.serial, p.host]] : [])]),
   },
   around: (cmd, ctx, io, run) => (ctx.allPbx ? runOnAllPbx(cmd, ctx, io) : run()),

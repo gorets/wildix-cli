@@ -144,3 +144,22 @@ test('inside a secret container a key is masked even next to a name', () => {
     apiKeys: [{id: 'k1', name: 'n', key: MASK}],
   });
 });
+
+test('WIM integrations: the key of a key and secret pair and a Nango connection id are secrets', () => {
+  const out = maskCloud({
+    installed: [
+      {service: 'webhook', data: {type: 'sqs', url: 'https://sqs.x/q', key: 'AKIA1', secret: 's1', events: []}},
+      {service: 'webhook', data: {type: 'webhook', url: 'https://hook', key: '', secret: 's2'}},
+      {service: 'hubspot_backend', data: {providerConfigKey: 'hubspot', connectionId: 'c-1', hub_id: 7}},
+    ],
+  });
+  assert.equal(out.installed[0].data.key, MASK);
+  assert.equal(out.installed[0].data.secret, MASK);
+  assert.equal(out.installed[0].data.type, 'sqs');
+  assert.equal(out.installed[1].data.key, '');
+  assert.equal(out.installed[2].data.connectionId, MASK);
+  assert.equal(out.installed[2].data.providerConfigKey, 'hubspot');
+  // a key that names a thing stays, and so does a connection id that is not a Nango connection
+  assert.deepEqual(maskCloud({key: 'hubspot', version: 2}), {key: 'hubspot', version: 2});
+  assert.deepEqual(maskCloud({connectionId: 'conn-1', name: 'x'}), {connectionId: 'conn-1', name: 'x'});
+});

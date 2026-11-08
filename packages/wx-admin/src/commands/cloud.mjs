@@ -5,7 +5,7 @@ import {UsageError} from 'wldx-core/errors';
 import {readJsonInput} from 'wldx-core/files';
 import {apiPath} from 'wldx-core/http';
 import {cloudClient} from '../cloud/client.mjs';
-import {SERVICES} from '../cloud/env.mjs';
+import {SPEC_SERVICES as SERVICES} from '../cloud/env.mjs';
 import {operationsOf} from '../cloud/specs.mjs';
 import {maskCloud} from '../cloud/mask.mjs';
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.6.0 — 2026-11-08
+
+- Nothing of its own: released with `wx-admin` 1.6.0 (`wx-admin integration`) and `wldx-core` 1.6.0.
+
 ## 1.5.0 — 2026-11-08
 
 - Nothing of its own: released with `wx-admin` 1.5.0 (`wx-admin wilma`, the masking of the cloud answers) and

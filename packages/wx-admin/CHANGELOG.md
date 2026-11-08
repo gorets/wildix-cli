@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.6.0 — 2026-11-08
+
+- Added: `wx-admin integration`, the integrations of the WIM console (its Integrations page) for the company of the
+  PBX, with the PBX's cloud token. `list` (`--service`), `get`, `logs` (30 newest, `--all`), `enable`, `disable`
+  (`--yes`), `delete` (`--yes`; `--force` for Salesforce Omni only), `settings` (the settings of a CRM connector;
+  `--from FILE --yes` replaces them, a file with masked values is refused), `traces`, `trace` (what each step sent
+  and got only with `--full`), `stats`. `webhook events|create|update`: HTTP webhooks; the signing secret is made by
+  wx-admin and printed once, `update` sends only what changes (`--url`, `--event`, `--add-event`, `--remove-event`,
+  `--rotate-secret --yes`). `app list|create|update|swap`: the iframe apps of x-bees (`update` sends the whole app
+  back, as the service rebuilds it from what it gets). `hub`: the integrations hub (Red Cactus): `company`,
+  `company-set` (`--yes` to put the company in), `company-delete --yes`, `user-list|get|create|update|delete` (the
+  password typed hidden or piped; an active user takes a license: `--yes`). As in the WIM console, the hub gets the
+  events of the company by a webhook (`<WIM host>/v2/integrations-hub/events/wildix`, 6 call events): `company-set`
+  makes it when it is missing (also on a company already in the hub: a repair), `company-delete` removes it. The
+  webhooks of Salesforce Omni and of the hub are not changed, disabled or removed by hand. An integration by id or by
+  its label in the list.
+- The console API returns the signing secrets of webhooks, the keys of SQS webhooks and the ids of Nango (CRM)
+  connections in clear: they are masked unless `--show-secrets`; who connected a CRM or created a webhook (names,
+  e-mails) only with `--full`. Masking: a `key` next to a `secret` and a `connectionId` next to a `providerConfigKey`
+  are secrets now, in `wx-admin cloud` answers too.
+- Not here: installing OAuth connectors (HubSpot, Salesforce, Zoho, Gong, Microsoft 365: a browser, the WIM console),
+  Google Calendar and Microsoft presence installs, SQS webhooks, the templates of x-bees apps, the deprecated events
+  `call:start|update|end`. `wx-admin cloud` does not offer the console API (it has no OpenAPI).
+- Checked live (stage, read only, on a company with webhooks, x-bees apps, HubSpot, Salesforce, Zoho CRM, Microsoft
+  presence and the hub): `list`, `get` (secrets masked), `logs --all`, `traces`, `trace`, `stats`, `app list`, `hub
+  company`, `hub user-list`. Writes, on another test PBX with temporary objects deleted after: a webhook (create,
+  update of URL and events, secret rotation: the stored secret is the one printed, disable, enable, delete), two
+  x-bees apps (create, update keeps what was not changed, swap, delete); the webhook of the hub refused; the hub:
+  `company-set` (a change and back, the webhook of the hub found, not made again), two users (create with a password
+  and without, inactive; get; update of name, admin, active, password; delete). Only with tests: `settings --from`,
+  `company-set` making a missing webhook, `company-delete`.
+- A password of the hub follows the rules of the WIM console (8 to 40 characters, an uppercase and a lowercase
+  letter, a digit, a symbol): Red Cactus answers a weaker one with an error 500. `hub user-delete` checks every user
+  before deleting any.
+
 ## 1.5.0 — 2026-11-08
 
 - Added: `wx-admin wilma`, Wilma (the agent platform of the Wildix cloud) for the company of the PBX, with the PBX's

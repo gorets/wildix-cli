@@ -28,6 +28,9 @@ src/wilma/               Wilma: api (the kinds of objects, their paths and creat
                          name, who uses an object), versioned (the commands of a kind: list … delete, versions,
                          diff, publish, restore), skills (export to a folder, create from it); the group is
                          src/commands/wilma.mjs
+src/integration/         the WIM console integrations: api (client on the WIM host, the console API unwrapped,
+                         labels, by id or label, masking and --full, webhook events), hub (the integrations hub);
+                         the group is src/commands/integration.mjs
 src/transfer/            config export/import/copy: kinds (read, write), refs (markers, safety scan), folder
                          (JSON Lines), selection, plan, apply (ordered writes), next-steps, log, run (the import flow)
 test/*.test.mjs          node:test against a fake PBX (fetch is injected); test/helpers.mjs: run(), fakeFetch(), fakeJwt(),
@@ -64,6 +67,15 @@ test/*.test.mjs          node:test against a fake PBX (fetch is injected); test/
   typed hidden or piped, never an option or an answer; the secret of a new agent API key is printed once, unmasked.
   Personal data (the owner of a user connection, callers in traces) only with `--full`. Deprecated operations and
   the legacy stack (voicebots, WIM tools) get no `wilma` command.
+- **Integrations** (`src/integration/`): the console API (`/console/integrations`) has no OpenAPI; its shapes come
+  from the sources of the WIM console and backend. It returns secrets in clear (webhook `secret`/`key`, Nango
+  `connectionId`): every answer goes through `shown()` (masked unless `--show-secrets`, people only with `--full`).
+  A webhook update sends only the fields that change (the service merges `data`); an app update sends the whole app
+  (the service rebuilds it). The webhooks a Salesforce Omni integration or the hub owns are never changed by hand;
+  the hub's (`<WIM host>/v2/integrations-hub/events/wildix`) is made by `hub company-set` and removed by
+  `hub company-delete`, as the WIM console does. The webhook events are
+  the console's list without its deprecated ones. A hub user is a Red Cactus user: creating an active one takes a
+  license (`--yes`). OAuth installs stay in the WIM console.
 - **Config transfer:** a reference between objects is a marker (`$ref`, `$self`, `$secret`, `$external`), never
   an id of the source; a new reference site of a dialplan application is one line of `APP_REFS` (src/transfer/
   refs.mjs).
