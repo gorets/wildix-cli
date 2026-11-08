@@ -10,6 +10,7 @@ import {groups as config} from './config.mjs';
 import {groups as device} from './device.mjs';
 import {groups as dialplan} from './dialplan.mjs';
 import {groups as integration} from './integration.mjs';
+import {groups as key} from './key.mjs';
 import {groups as kb} from './kb.mjs';
 import {groups as kite} from './kite.mjs';
 import {login, logout} from './login.mjs';
@@ -47,6 +48,7 @@ export const GROUPS = {
   ...integration,
   ...kite,
   ...wilma,
+  ...key,
   ...pbx,
 };
 
@@ -82,6 +84,7 @@ const READ_ONLY = {
   sound: ['list'],
   records: ['history', 'history-user', 'call', 'recordings', 'voicemails'],
   pbx: ['check'],
+  key: ['scopes', 'list', 'get'],
 };
 for (const [group, names] of Object.entries(READ_ONLY)) {
   for (const name of names) {

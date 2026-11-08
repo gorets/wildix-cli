@@ -1,6 +1,6 @@
 # wldx-admin-cli — `wx-admin`, an admin command line for the Wildix PBX
 
-**Version 1.8.0** · unofficial · MIT
+**Version 1.9.0** · unofficial · MIT
 
 `wx-admin` manages a Wildix PBX through its REST API (`https://<pbx>/api/v1`): the system and its settings, users,
 ACL, queues, dialplans and the objects they use (timetables, IVR, switches, paging, the dialplan database), trunks,
@@ -191,6 +191,28 @@ WhatsApp, Messenger and RCS channels of the company. A target is `service:SERVIC
 uri: `wx-admin kite services`), `agent:EMAIL` or `bot:BOT`. `set --target` changes where a channel's conversations go
 and keeps its work-hours routes; routes, appearance and actions are edited as JSON (`export` or `get --output json`,
 then `--from`). Numbers and senders themselves are bought and bound elsewhere.
+
+## Company API Keys
+
+`wx-admin key` makes and manages the Company API Keys of the company of the PBX, the keys `wx-admin login --api-key` and
+other tools sign in with. Only the root admin may, and only with a password login (Basic or the WMS sign-in): wx-admin
+mints a short-lived token for the Auth API Keys service from that access, keeps it in memory and never prints it. A
+key login cannot make keys. `--env prod|stable|stage` picks the service (default: the one of the PBX).
+
+```
+wx-admin key scopes --group pbx
+wx-admin key create --name "Reporting" --scope pbx:read --expires 90d --to ~/reporting.key
+wx-admin key create --name "Admin tool" --scope pbx:read --scope pbx:'*' --login --yes
+wx-admin key list
+wx-admin key rename Reporting "Reporting (Anna)"
+wx-admin key delete Reporting --yes
+```
+
+The key value (`wsk-v1-…`) exists only in the answer to `create`: the service keeps a hash. So `create` needs a place for
+it and refuses to start without one: `--to FILE` (a new file, mode 0600), `--login --yes` (it becomes the login of the
+PBX and replaces the saved access, so sign in again with `--password` to manage keys) or `--show-secrets` (printed). In
+a terminal, without `--scope`, a picker offers the catalog. `--expires` takes 90m, 12h, 30d, 1y or an ISO date (1 hour
+to 1 year, default 30d); `*:*` is for development: `--yes`, 7 days at most. Only the name of a key can be changed.
 
 ## Commands
 
@@ -612,6 +634,19 @@ Wilma, the agent platform of the cloud: agents, skills, tools, connectors, secre
 | `wx-admin wilma trace get <trace> [--full]` | one trace and its spans as a timeline |
 | `wx-admin wilma trace model-call <trace> <span>` | one model call of a trace: model, settings, tokens, messages |
 | `wx-admin wilma usage [--service S] [--since DATE] [--until DATE] [--interval hour\|day\|week\|month\|total] [--group-by KEY]... [--filter KEY=VALUE]...` | usage of Wilma over a time window: tokens, call seconds, spans, errors… by service, agent or channel |
+
+### wx-admin key
+
+Company API Keys of the company: create, list, rename, delete (the root admin, with the password login).
+
+| Command | What it does |
+| --- | --- |
+| `wx-admin key scopes [--group NAME]` | the scopes a key can have |
+| `wx-admin key list` | the keys of the company (name, scopes, expiry; the key values are never shown again) |
+| `wx-admin key get <id\|name>` | one key by id or name |
+| `wx-admin key create --name NAME [--scope SCOPE ...] [--expires 30d\|DATE] [--user EXT] (--to FILE \| --login --yes \| --show-secrets)` | make a key; its value is shown once and goes to a file, to the login of the PBX, or to the screen |
+| `wx-admin key rename <id\|name> <new name>` | change the name of a key (nothing else of a key can change) |
+| `wx-admin key delete <id\|name> --yes` | delete a key: whatever signs in with it stops working |
 
 ### wx-admin pbx
 

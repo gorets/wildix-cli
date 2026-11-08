@@ -31,6 +31,9 @@ src/wilma/               Wilma: api (the kinds of objects, their paths and creat
 src/integration/         the WIM console integrations: api (client on the WIM host, the console API unwrapped,
                          labels, by id or label, masking and --full, webhook events), hub (the integrations hub);
                          the group is src/commands/integration.mjs
+src/keys/auth.mjs        the Auth API Keys service: the user token minted from the password access (personal token →
+                         OpenID `api-keys` token, aud = the auth host of the environment), the /api/v3 client
+src/commands/key.mjs     Company API Keys: scopes, list, get, create (the value goes to --to, --login or --show-secrets), rename, delete
 src/commands/kite.mjs    Kite widgets and the messaging channels (SMS, WhatsApp by number; Messenger, RCS by sender)
 src/transfer/            config export/import/copy: kinds (read, write), refs (markers, safety scan), folder
                          (JSON Lines), selection, plan, apply (ordered writes), next-steps, log, run (the import flow)

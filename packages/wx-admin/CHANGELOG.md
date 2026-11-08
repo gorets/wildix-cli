@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.0 — 2026-11-08
+
+- Added: `wx-admin key scopes|list|get|create|rename|delete`, the Company API Keys of the company, through the Auth API
+  Keys service (`auth[-stable|-stage].wildix.com`). The root admin's password login mints the user token in memory
+  (personal token of the PBX, then the OpenID token with the `api-keys` scope); a key login cannot manage keys.
+  `create` needs a place for the key value, which exists only in the answer: `--to FILE` (new, 0600), `--login --yes`
+  (becomes the login of the PBX) or `--show-secrets`; a key that cannot be written is deleted again. A picker offers the
+  scopes in a terminal; `*:*` needs `--yes` and 7 days at most. Checked live on a stage PBX: scopes, list, create (--to), get, rename, delete, the new key reading the PBX, a key login refused. The picker and --login only with tests.
+
 ## 1.8.0 — 2026-11-08
 
 - Added: `wx-admin config export|import|copy` carry the cloud of the company besides the PBX configuration. Kinds, by

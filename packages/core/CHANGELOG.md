@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.0 — 2026-11-08
+
+- Nothing of its own: released with `wx-admin` 1.9.0 (`wx-admin key`, Company API Keys), one version for the three.
+
 ## 1.8.0 — 2026-11-08
 
 - Nothing of its own: released with `wx-admin` 1.8.0 (the company cloud in `config export|import|copy`,
