@@ -11,6 +11,7 @@ import {groups as device} from './device.mjs';
 import {groups as dialplan} from './dialplan.mjs';
 import {groups as integration} from './integration.mjs';
 import {groups as kb} from './kb.mjs';
+import {groups as kite} from './kite.mjs';
 import {login, logout} from './login.mjs';
 import {status} from './status.mjs';
 import {groups as pbx} from './pbx.mjs';
@@ -44,6 +45,7 @@ export const GROUPS = {
   ...config,
   ...kb,
   ...integration,
+  ...kite,
   ...wilma,
   ...pbx,
 };

@@ -5,7 +5,8 @@
 `wx-admin` manages a Wildix PBX through its REST API (`https://<pbx>/api/v1`): the system and its settings, users,
 ACL, queues, dialplans and the objects they use (timetables, IVR, switches, paging, the dialplan database), trunks,
 devices, phonebooks, sounds, call history, recordings and voicemails; any other operation through `wx-admin api`. It works with several PBX at once, and also manages the cloud services of the PBX's company (the knowledge base, voicebots, WIM tools, Wilma, the
-integrations of the WIM console: webhooks, x-bees apps, CRM connectors, the integrations hub) with the cloud token the PBX gives its administrator. It signs in to the PBX itself, with a Company API Key or the WMS login and password of an administrator: no x-bees
+integrations of the WIM console: webhooks, x-bees apps, CRM connectors, the integrations hub; Kite chat widgets and
+the SMS, WhatsApp, Messenger and RCS channels) with the cloud token the PBX gives its administrator. It signs in to the PBX itself, with a Company API Key or the WMS login and password of an administrator: no x-bees
 account is needed. Its twin for the everyday user is
 [`wx`](https://github.com/gorets/wildix-cli/tree/main/packages/wx) (npm `wldx-cli`), which uses the x-bees login.
 
@@ -136,7 +137,7 @@ wx-admin config copy --from old --to new               # the same without the fo
 ## Cloud services
 
 An administrator of a PBX also manages the cloud services of the PBX's company: the knowledge base (WIM),
-voicebots, WIM tools, Wilma and the integrations of the WIM console. The PBX gives its administrator its own cloud token, the CPA token (Cognito PBX
+voicebots, WIM tools, Wilma, the integrations of the WIM console, and Kite with the messaging channels. The PBX gives its administrator its own cloud token, the CPA token (Cognito PBX
 Auth: the PBX itself as a user of its company, valid 12 hours), and those services accept it. `wx-admin` takes it from
 the PBX chosen as for every command (`--pbx`, the default PBX, the only one), keeps it in memory only
 and sends it only to the service called. A PBX user without the Admin role is refused; whether a Company API Key may
@@ -160,6 +161,8 @@ wx-admin integration list                            # webhooks, x-bees apps, CR
 wx-admin integration webhook create --url https://example.com/hook --event call:completed
 wx-admin integration logs <id> --all                 # what an integration did, newest first
 wx-admin integration settings <id> --output json > s.json   # change it, then: settings <id> --from s.json --yes
+wx-admin kite widget list                            # the chat widgets of the websites
+wx-admin kite sms set +3902123456 --target service:Support   # where the SMS of a number go
 wx-admin cloud wilma                                 # every operation of Wilma that takes the token
 wx-admin cloud voicebots ListVoiceBots               # any operation, checked against the bundled OpenAPI
 ```
@@ -182,6 +185,12 @@ a user takes a Red Cactus license; the hub gets the events by a webhook that `hu
 `hub company-delete` removes, as the console does). The console API returns the secrets of webhooks and the ids of CRM connections in
 clear: `wx-admin` masks them unless `--show-secrets`, and shows the people who connected a CRM only with `--full`.
 Installing an OAuth connector (HubSpot, Salesforce, Zoho, Gong, Microsoft 365) needs a browser: the WIM console.
+
+`wx-admin kite` decides where customer conversations go: the Kite chat widgets of websites (`widget`) and the SMS,
+WhatsApp, Messenger and RCS channels of the company. A target is `service:SERVICE` (a call group, by id, title or
+uri: `wx-admin kite services`), `agent:EMAIL` or `bot:BOT`. `set --target` changes where a channel's conversations go
+and keeps its work-hours routes; routes, appearance and actions are edited as JSON (`export` or `get --output json`,
+then `--from`). Numbers and senders themselves are bought and bound elsewhere.
 
 ## Commands
 
@@ -509,6 +518,33 @@ The integrations of the WIM console: webhooks, x-bees apps, CRM connectors, logs
 | `wx-admin integration hub user-create <extension> --first-name NAME --last-name NAME --email EMAIL [--pbx-serial SERIAL] [--password] [--inactive] [--welcome] --yes` | a user of the hub for an extension; an active one takes a Red Cactus license (needs --yes) |
 | `wx-admin integration hub user-update <extension> [--first-name NAME] [--last-name NAME] [--email EMAIL] [--pbx-serial SERIAL] [--active on\|off] [--admin on\|off] [--password]` | change a user of the hub: name, e-mail, PBX, active, admin, password |
 | `wx-admin integration hub user-delete <extension>... --yes` | delete users of the hub: their Red Cactus users and licenses go too (needs --yes) |
+
+### wx-admin kite
+
+Kite chat widgets and the messaging channels (SMS, WhatsApp, Messenger, RCS): where conversations go.
+
+| Command | What it does |
+| --- | --- |
+| `wx-admin kite services [--search TEXT]` | the services of the company conversations can go to: id, title, uri, extensions, numbers |
+| `wx-admin kite widget list` | the Kite widgets: name, where conversations go, who may chat, last change |
+| `wx-admin kite widget get <widget> [--show-secrets]` | one widget with its routing, appearance and welcome messages |
+| `wx-admin kite widget export <widget> [--to FILE] [--show-secrets]` | a widget as JSON that create --from and update --from take (to stdout, or to a new file) |
+| `wx-admin kite widget create (--name NAME --target TARGET [--anonymous off\|allowed\|only] \| --from FILE\|-)` | a widget: its name and where conversations go, or everything from an export |
+| `wx-admin kite widget update <widget> [--name NAME] [--target TARGET] [--anonymous off\|allowed\|only] [--from FILE\|-]` | change a widget: name, target, anonymous visitors, or everything from an export |
+| `wx-admin kite widget delete <widget>... --yes` | delete widgets: on the websites that embed them they stop working (needs --yes) |
+| `wx-admin kite sms list` | the SMS numbers of the company: linked service, where conversations go |
+| `wx-admin kite sms get <number>` | the configuration of one SMS number: service, target, routes, actions |
+| `wx-admin kite sms set <number> (--target TARGET [--service SERVICE] \| --from FILE\|- --yes)` | where the conversations of a SMS number go (its work-hours routes stay), or all of it from a file (--yes) |
+| `wx-admin kite whatsapp list` | the WhatsApp numbers of the company: linked service, where conversations go |
+| `wx-admin kite whatsapp get <number>` | the configuration of one WhatsApp number: service, target, routes, actions |
+| `wx-admin kite whatsapp set <number> (--target TARGET [--service SERVICE] \| --from FILE\|- --yes)` | where the conversations of a WhatsApp number go (its work-hours routes stay), or all of it from a file (--yes) |
+| `wx-admin kite whatsapp templates <number>` | the message templates a WhatsApp number may start a conversation with |
+| `wx-admin kite messenger list` | the Messenger senders of the company: linked service, where conversations go |
+| `wx-admin kite messenger get <sender>` | the configuration of one Messenger sender: service, target, routes, actions |
+| `wx-admin kite messenger set <sender> (--target TARGET [--service SERVICE] \| --from FILE\|- --yes)` | where the conversations of a Messenger sender go (its work-hours routes stay), or all of it from a file (--yes) |
+| `wx-admin kite rcs list` | the RCS senders of the company: linked service, where conversations go |
+| `wx-admin kite rcs get <sender>` | the configuration of one RCS sender: service, target, routes, actions |
+| `wx-admin kite rcs set <sender> (--target TARGET [--service SERVICE] \| --from FILE\|- --yes)` | where the conversations of a RCS sender go (its work-hours routes stay), or all of it from a file (--yes) |
 
 ### wx-admin wilma
 

@@ -37,6 +37,17 @@ export const SERVICES = {
       stage: 'https://wim-stage.wildix.com',
     },
   },
+  // Kite (the chat widgets of websites) and the customer messaging channels (SMS, WhatsApp, Messenger, RCS) of
+  // x-bees: no OpenAPI that takes the CPA token; `wx-admin kite` calls it.
+  kite: {
+    label: 'Kite and messaging channels',
+    spec: false,
+    bases: {
+      prod: 'https://api.x-bees.com',
+      stable: 'https://api-stable.x-bees.com',
+      stage: 'https://api-stage.x-bees.com',
+    },
+  },
   wilma: {
     label: 'Wilma',
     bases: {

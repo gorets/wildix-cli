@@ -31,6 +31,7 @@ src/wilma/               Wilma: api (the kinds of objects, their paths and creat
 src/integration/         the WIM console integrations: api (client on the WIM host, the console API unwrapped,
                          labels, by id or label, masking and --full, webhook events), hub (the integrations hub);
                          the group is src/commands/integration.mjs
+src/commands/kite.mjs    Kite widgets and the messaging channels (SMS, WhatsApp by number; Messenger, RCS by sender)
 src/transfer/            config export/import/copy: kinds (read, write), refs (markers, safety scan), folder
                          (JSON Lines), selection, plan, apply (ordered writes), next-steps, log, run (the import flow)
 test/*.test.mjs          node:test against a fake PBX (fetch is injected); test/helpers.mjs: run(), fakeFetch(), fakeJwt(),
@@ -76,6 +77,12 @@ test/*.test.mjs          node:test against a fake PBX (fetch is injected); test/
   `hub company-delete`, as the WIM console does. The webhook events are
   the console's list without its deprecated ones. A hub user is a Red Cactus user: creating an active one takes a
   license (`--yes`). OAuth installs stay in the WIM console.
+- **Kite** (`src/commands/kite.mjs`, host api*.x-bees.com): no OpenAPI takes the CPA token (the model lists no `pbx`
+  auth, the service accepts it). Never send `company`. A target is `service:` / `agent:` / `bot:`; UpdateWidget
+  replaces the widget, so an update sends what it has with the changes, and an export of another widget is refused.
+  A channel `set --target` keeps the routes (work hours) and actions; `--from` replaces all and needs `--yes`. A number
+  with no configuration takes the service whose messaging number it is (as the WIM console does). Not here: what the
+  visitors of a widget use (calendar, agents, config, preview), Instagram (refused by the service).
 - **Config transfer:** a reference between objects is a marker (`$ref`, `$self`, `$secret`, `$external`), never
   an id of the source; a new reference site of a dialplan application is one line of `APP_REFS` (src/transfer/
   refs.mjs).

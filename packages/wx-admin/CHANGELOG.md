@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+- Added: `wx-admin kite`, Kite (the chat widgets x-bees puts on websites) and the customer messaging channels of the
+  company, with the PBX's cloud token. `services`: the services (call groups) conversations can go to. `widget
+  list|get|export|create|update|delete`: a widget by id or name; `create --name --target` or `--from` an export;
+  `update` changes the name, the target or who may chat (`--anonymous off|allowed|only`) and sends the rest of the
+  widget back as it is (the service replaces a widget with what it gets), or takes an export of the same widget
+  (`--from`); `delete --yes`. `sms`, `whatsapp`, `messenger`, `rcs`: `list` (numbers or senders with their linked
+  service and where their conversations go), `get`, `set --target [--service]` (the work-hours routes and actions
+  stay; a number never configured takes the service whose messaging number it is) or `set --from FILE --yes` (the
+  whole configuration); `whatsapp templates`. A target is `service:SERVICE` (id, title or uri), `agent:EMAIL` or
+  `bot:BOT` (id or name). A file holding masked values is refused.
+- Not here: what the visitors of a widget use (calendar, agents, widget config and preview), Instagram (the service
+  refuses it), buying or binding numbers and senders. `wx-admin cloud` does not offer Kite (no OpenAPI takes the
+  token).
+- Checked live (stage): every read on a company with widgets (service, agent and bot targets), SMS numbers with
+  work-hours routes and a WhatsApp configuration; on a test PBX, a temporary widget (create, update of name, target
+  and anonymous visitors, export, update from the export, a plain rename keeping the appearance, delete). Only with
+  tests: the writes of the channels (no numbers or senders on the test PBX).
+
 ## 1.6.0 — 2026-11-08
 
 - Added: `wx-admin integration`, the integrations of the WIM console (its Integrations page) for the company of the

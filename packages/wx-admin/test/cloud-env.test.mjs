@@ -22,7 +22,7 @@ test('kb has no stable', () => {
   assert.throws(() => baseOf('kb', 'stable'), /the knowledge base has no stable environment: prod or stage/);
 });
 
-test('every base is https under wildix.com, without a path', () => {
+test('every base is https under wildix.com or x-bees.com, without a path', () => {
   for (const s of Object.values(SERVICES))
-    for (const url of Object.values(s.bases)) assert.match(url, /^https:\/\/[a-z0-9.-]+\.wildix\.com$/);
+    for (const url of Object.values(s.bases)) assert.match(url, /^https:\/\/[a-z0-9.-]+\.(?:wildix|x-bees)\.com$/);
 });
