@@ -366,3 +366,96 @@ test('a 403 names the scope of the command', async () => {
   assert.equal(r.code, 2);
   assert.match(r.stderr, /pbxpower:\*/);
 });
+
+const NET = (over = {}) => ({
+  ip: '10.0.0.1',
+  serial: 'SERA',
+  host: 'demo.wildixin.com',
+  isServer: true,
+  port: 443,
+  failOver: '',
+  version: '7.11.1',
+  isUpdateNeeded: false,
+  dn: 'pbxid=SERA,dc=wildix',
+  ...over,
+});
+const NETWORK = {
+  records: [
+    NET(),
+    NET({ip: '10.0.0.2', serial: 'SERB', host: 'b.wildixin.com', isServer: false, failOver: 'demo.wildixin.com'}),
+    NET({
+      ip: '10.0.0.3',
+      serial: 'SERC',
+      host: 'c.wildixin.com',
+      isServer: false,
+      version: '7.10.0',
+      isUpdateNeeded: true,
+    }),
+  ],
+};
+
+test('network: reads GET /Network/Pbxes', async () => {
+  const pbx = fakePbx({'GET /Network/Pbxes': NETWORK});
+  const r = await wx(pbx, ['system', 'network']);
+  assert.equal(r.code, 0, r.stderr);
+  assert.deepEqual(
+    pbx.calls.map((c) => [c.method, c.path, c.body]),
+    [['GET', '/api/v1/Network/Pbxes', undefined]],
+  );
+});
+
+test('network as text: a server, a member with failover, one needing an update; the current PBX marked', async () => {
+  const pbx = fakePbx({'GET /Network/Pbxes': NETWORK});
+  const t = await text(pbx, ['system', 'network']);
+  assert.equal(t.code, 0, t.stderr);
+  const lines = t.stdout.trimEnd().split('\n');
+  assert.match(lines[0], /^ {2}host +serial +version +role +failover +update needed$/);
+  assert.match(lines[1], /^\* demo\.wildixin\.com +SERA +7\.11\.1 +server *$/);
+  assert.match(lines[2], /^ {2}b\.wildixin\.com +SERB +7\.11\.1 +member +demo\.wildixin\.com *$/);
+  assert.match(lines[3], /^ {2}c\.wildixin\.com +SERC +7\.10\.0 +member +yes$/);
+  assert.doesNotMatch(t.stdout, /not in a WMS network/);
+  assert.doesNotMatch(t.stdout, /10\.0\.0\./);
+});
+
+test('network as text: one PBX is not in a WMS network with others', async () => {
+  const pbx = fakePbx({'GET /Network/Pbxes': {records: [NET()]}});
+  const t = await text(pbx, ['system', 'network']);
+  assert.equal(t.code, 0, t.stderr);
+  assert.match(t.stdout, /^\* demo\.wildixin\.com +SERA +7\.11\.1 +server/m);
+  assert.match(t.stdout, /^This PBX is not in a WMS network with other PBXs\.$/m);
+});
+
+test('network as JSON: the records as they come, with ip and dn', async () => {
+  const pbx = fakePbx({'GET /Network/Pbxes': NETWORK});
+  const r = await wx(pbx, ['system', 'network', '--output', 'json']);
+  assert.equal(r.code, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout), NETWORK);
+});
+
+test('network: a 403 says the WMS network is not available, with the scope it needs, exit 2', async () => {
+  const pbx = fakePbx({
+    'GET /Network/Pbxes': new Response(JSON.stringify({type: 'error', reason: 'nope'}), {status: 403}),
+  });
+  const r = await text(pbx, ['system', 'network']);
+  assert.equal(r.code, 2);
+  assert.match(r.stderr, /the WMS network is not available with this access \(403\)/);
+  assert.match(r.stderr, /the scope pbx:read/);
+  assert.doesNotMatch(r.stderr, /\n\s+at /);
+});
+
+test('network: a 404 says the WMS network is not available, exit 1', async () => {
+  const pbx = fakePbx({
+    'GET /Network/Pbxes': new Response(JSON.stringify({type: 'error', reason: 'nope'}), {status: 404}),
+  });
+  const r = await text(pbx, ['system', 'network']);
+  assert.equal(r.code, 1);
+  assert.match(r.stderr, /the WMS network is not available with this access \(404\)/);
+  assert.doesNotMatch(r.stderr, /\n\s+at /);
+});
+
+test('network: a 401 stays an access error, exit 2', async () => {
+  const pbx = fakePbx({
+    'GET /Network/Pbxes': new Response(JSON.stringify({type: 'error', reason: 'Unauthorized'}), {status: 401}),
+  });
+  assert.equal((await text(pbx, ['system', 'network'])).code, 2);
+});

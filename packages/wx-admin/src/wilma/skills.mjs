@@ -14,15 +14,16 @@ const kind = KINDS.skills;
 const SKILL_JSON = 'skill.json';
 const FILE_PATH = /^[a-zA-Z0-9](?:[a-zA-Z0-9._/-]*[a-zA-Z0-9_])?$/; // the pattern of SkillFile.path
 
-// The place of a skill file in a folder: a relative path that stays inside it, with no hidden part (.git, .envrc).
+// A path of a skill file that stays inside any folder: relative, with no hidden part (.git, .envrc) and so no `..`.
+export const isSkillFilePath = (p) =>
+  FILE_PATH.test(String(p)) &&
+  !String(p)
+    .split('/')
+    .some((s) => s === '' || s.startsWith('.'));
+
+// The place of a skill file in a folder: a relative path that stays inside it, with no hidden part.
 function inside(dir, p) {
-  if (
-    !FILE_PATH.test(String(p)) ||
-    String(p)
-      .split('/')
-      .some((s) => s === '' || s.startsWith('.'))
-  )
-    throw new UsageError(`Not a path of a skill file: ${p}`);
+  if (!isSkillFilePath(p)) throw new UsageError(`Not a path of a skill file: ${p}`);
   const full = path.resolve(dir, p);
   if (!full.startsWith(dir + path.sep)) throw new UsageError(`Not a path of a skill file: ${p}`);
   return full;

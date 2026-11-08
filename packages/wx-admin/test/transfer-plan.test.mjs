@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {TRANSFER_KINDS} from '../src/transfer/kinds.mjs';
 import {makePlan} from '../src/transfer/plan.mjs';
 import {toPortable} from '../src/transfer/refs.mjs';
 
@@ -58,7 +59,7 @@ const SOURCE = () =>
           data: {
             extension: '101',
             name: 'Ann',
-            email: 'ann@x.com',
+            email: 'ann@x.example',
             licenseType: 'business',
             groupDn: gid(7),
             dialplan: 'users',
@@ -203,4 +204,215 @@ test('review 4: queue members are checked against the users of the target; not c
   p = makePlan(s, {queues: [], users: {error: 'Access error'}}, {...B});
   assert.equal(p.items[0].warnings[0].type, 'not-checked');
   assert.match(p.items[0].warnings[0].text, /101/);
+});
+
+// Fake kinds (cloud side, service `fake`), registered for one test.
+function fakeKind(t, name, extra = {}) {
+  TRANSFER_KINDS[name] = {group: 'test', label: name, side: 'cloud', service: 'fake', read: async () => [], ...extra};
+  t.after(() => delete TRANSFER_KINDS[name]);
+}
+
+test('differing paths are listed', () => {
+  const s = toPortable(
+    {
+      switches: [
+        {id: '1', name: 'night', data: {title: 'night', state: 1, list: ['a', 'b'], deep: {x: {y: 1}}}},
+        {id: '2', name: 'many', data: {title: 'many', a: 1, b: 2, c: 3, d: 4, e: 5, f: 6}},
+        {id: '3', name: 'same', data: {title: 'same', state: 0}},
+      ],
+    },
+    A,
+  );
+  const t = {
+    switches: [
+      {id: '7', name: 'night', data: {title: 'night', state: '1', list: ['a'], deep: {x: {y: 2}}, more: {z: 1}}},
+      {id: '8', name: 'many', data: {title: 'many'}},
+      {id: '9', name: 'same', data: {title: 'same', state: '0'}},
+    ],
+  };
+  const p = makePlan(s, t, {...B});
+  assert.equal(item(p, 'switches/night').state, 'differs');
+  assert.deepEqual(item(p, 'switches/night').paths, ['list[1]', 'deep.x.y', 'more']);
+  assert.deepEqual(item(p, 'switches/many').paths, ['a', 'b', 'c', 'd', 'e']);
+  assert.equal(item(p, 'switches/same').state, 'same');
+  assert.equal(item(p, 'switches/same').paths, undefined);
+});
+
+test('missing lookup blocks with a map hint', (t) => {
+  fakeKind(t, 'test-people', {lookup: true});
+  fakeKind(t, 'test-agents', {
+    portable(data, h) {
+      data.owner = h.ref(data.owner, 'test-people', 'owner');
+    },
+  });
+  const s = toPortable(
+    {
+      'test-people': [{id: 'u1', name: 'ann@x.example', data: {}}],
+      'test-agents': [{id: 'a1', name: 'bot', data: {owner: 'u1'}}],
+    },
+    A,
+  );
+  let p = makePlan(s, {'test-people': [], 'test-agents': []}, {...B});
+  assert.equal(item(p, 'test-agents/bot').state, 'blocked');
+  assert.equal(
+    item(p, 'test-agents/bot').reason,
+    'needs test-people/ann@x.example: not on b.wildixin.com (map it with --map)',
+  );
+  const ann = {id: 'u9', name: 'ann@x.example', value: {id: 'u9', email: 'ann@x.example'}, data: {}};
+  p = makePlan(s, {'test-people': [ann], 'test-agents': []}, {...B});
+  assert.equal(item(p, 'test-agents/bot').state, 'new');
+  assert.deepEqual(p.target['test-people/ann@x.example'], {id: 'u9', name: 'ann@x.example', value: ann.value});
+  assert.equal(item(p, 'test-people/ann@x.example'), undefined);
+});
+
+test('overwritten deployed agent deploys', () => {
+  const s = {
+    kinds: {
+      'wilma-agents': [
+        {name: 'deployed', data: {prompt: 'new', deploy: true}},
+        {name: 'draft', data: {prompt: 'new', deploy: false}},
+        {name: 'fresh', data: {prompt: 'new', deploy: true}},
+        {name: 'same', data: {prompt: 'old', deploy: true}},
+      ],
+    },
+  };
+  const t = {
+    'wilma-agents': [
+      {id: '1', name: 'deployed', data: {prompt: 'old', deploy: true}},
+      {id: '2', name: 'draft', data: {prompt: 'old', deploy: true}},
+      {id: '4', name: 'same', data: {prompt: 'old', deploy: true}},
+    ],
+  };
+  const p = makePlan(s, t, {...B});
+  assert.equal(item(p, 'wilma-agents/deployed').deploys, true);
+  assert.equal(item(p, 'wilma-agents/draft').deploys, undefined);
+  assert.equal(item(p, 'wilma-agents/fresh').deploys, undefined);
+  assert.equal(item(p, 'wilma-agents/same').deploys, undefined);
+});
+
+test('portable warnings are copied onto their items', () => {
+  const s = {
+    kinds: {switches: [{name: 'night', data: {title: 'night'}}]},
+    warnings: [{kind: 'switches', name: 'night', path: 'toolVersion', text: 'pinned to an older version, dropped'}],
+  };
+  const p = makePlan(s, {switches: []}, {...B});
+  assert.deepEqual(item(p, 'switches/night').warnings, [
+    {type: 'portable', path: 'toolVersion', text: 'pinned to an older version, dropped'},
+  ]);
+});
+
+test('a cloud object bound by a secret is blocked with the field', () => {
+  const s = {
+    kinds: {switches: [{name: 'night', data: {title: 'night'}}]},
+    bound: [{kind: 'switches', name: 'night', path: 'handler.customHeaders.X-Key', found: 'secret'}],
+  };
+  const it = makePlan(s, {switches: []}, {...B}).items[0];
+  assert.equal(it.state, 'blocked');
+  assert.equal(it.reason, 'secret field handler.customHeaders.X-Key not known');
+});
+
+test('a lookup the target lacks is named on the item (a name with spaces too); one it cannot read is not mappable', (t) => {
+  fakeKind(t, 'test-people', {lookup: true, label: 'person'});
+  fakeKind(t, 'test-agents', {
+    portable(data, h) {
+      data.owner = h.ref(data.owner, 'test-people', 'owner');
+    },
+  });
+  const s = toPortable(
+    {
+      'test-people': [{id: 'u1', name: 'Sales team', data: {}}],
+      'test-agents': [{id: 'a1', name: 'bot', data: {owner: 'u1'}}],
+    },
+    A,
+  );
+  let p = makePlan(s, {'test-people': [], 'test-agents': []}, {...B});
+  assert.deepEqual(item(p, 'test-agents/bot').missing, {kind: 'test-people', name: 'Sales team'});
+  assert.equal(
+    item(p, 'test-agents/bot').reason,
+    'needs test-people/Sales team: not on b.wildixin.com (map it with --map)',
+  );
+
+  p = makePlan(s, {'test-people': {error: 'HTTP 503'}, 'test-agents': []}, {...B});
+  assert.equal(item(p, 'test-agents/bot').state, 'blocked');
+  assert.equal(
+    item(p, 'test-agents/bot').reason,
+    'needs test-people/Sales team: test-people cannot be read on b.wildixin.com: HTTP 503',
+  );
+  assert.equal(item(p, 'test-agents/bot').missing, undefined);
+
+  // The same for any cloud kind the export does not carry (a knowledge base the agent points at).
+  fakeKind(t, 'test-bases');
+  const q = makePlan(
+    {kinds: {'test-agents': [{name: 'kb-user', data: {kb: {$ref: 'test-bases/Docs', as: 'id'}}}]}},
+    {'test-bases': {error: 'HTTP 503'}, 'test-agents': []},
+    {...B},
+  );
+  assert.equal(
+    item(q, 'test-agents/kb-user').reason,
+    'needs test-bases/Docs: test-bases cannot be read on b.wildixin.com: HTTP 503',
+  );
+});
+
+test('a lookup name two target objects share blocks what needs it', (t) => {
+  fakeKind(t, 'test-people', {lookup: true, label: 'x-bees service'});
+  fakeKind(t, 'test-agents', {
+    portable(data, h) {
+      data.owner = h.ref(data.owner, 'test-people', 'owner');
+    },
+  });
+  const s = toPortable(
+    {
+      'test-people': [{id: 'u1', name: 'Sales', data: {}}],
+      'test-agents': [{id: 'a1', name: 'bot', data: {owner: 'u1'}}],
+    },
+    A,
+  );
+  const twice = [
+    {id: 's1', name: 'Sales', data: {}},
+    {id: 's2', name: 'Sales', data: {}},
+  ];
+  const p = makePlan(s, {'test-people': twice, 'test-agents': []}, {...B});
+  assert.equal(item(p, 'test-agents/bot').state, 'blocked');
+  assert.equal(
+    item(p, 'test-agents/bot').reason,
+    'needs test-people/Sales: two x-bees services named Sales on b.wildixin.com',
+  );
+});
+
+test('a target access list naming users the target did not read is kept as it is: it differs, never same', () => {
+  const app = (deniedEmails) => ({
+    id: 'ap1',
+    name: 'Orders',
+    data: {title: 'Orders', accessEmails: ['ann@x.example'], deniedEmails},
+  });
+  const s = toPortable(
+    {'integration-apps': [app([])], 'xbees-users': [{id: 'u1', name: 'ann@x.example', data: {}}]},
+    A,
+  );
+  const target = {
+    'integration-apps': [app(['eve@x.example'])],
+    'xbees-users': [{id: 'u-y', name: 'ann@x.example', data: {}}],
+  };
+  const it = item(makePlan(s, target, {...B}), 'integration-apps/Orders');
+  assert.equal(it.state, 'differs');
+  assert.deepEqual(it.paths, ['deniedEmails[0]']);
+});
+
+test('a need on a synced lookup the target cannot read blocks, even when its source object is new', (t) => {
+  fakeKind(t, 'test-services', {lookup: true, label: 'x-bees service', syncedFrom: 'test-queues'});
+  fakeKind(t, 'test-queues');
+  fakeKind(t, 'test-widgets');
+  const s = {
+    kinds: {
+      'test-queues': [{name: 'Support', data: {}}],
+      'test-widgets': [{name: 'w', data: {service: {$ref: 'test-services/Support', as: 'id'}}}],
+    },
+  };
+  const p = makePlan(s, {'test-services': {error: 'HTTP 503'}, 'test-queues': [], 'test-widgets': []}, {...B});
+  assert.equal(item(p, 'test-queues/Support').state, 'new');
+  assert.equal(item(p, 'test-widgets/w').state, 'blocked');
+  assert.equal(
+    item(p, 'test-widgets/w').reason,
+    'needs test-services/Support: test-services cannot be read on b.wildixin.com: HTTP 503',
+  );
 });

@@ -4,6 +4,8 @@
 // PBX wants every field on a PUT).
 import {apiPath, query} from 'wldx-core/http';
 import {accessRefused} from '../pbx.mjs';
+import {CLOUD_KINDS} from './cloud/index.mjs';
+import {PBX_PORTABLE} from './pbx-portable.mjs';
 
 const listOf = (r) => (Array.isArray(r) ? r : (r?.records ?? []));
 const without = (o, keys) => Object.fromEntries(Object.entries(o ?? {}).filter(([k]) => !keys.includes(k)));
@@ -22,6 +24,7 @@ function listed({group, label, path, scope, nameField, strip = [], item = (id) =
     group,
     label,
     scope,
+    nameField,
     read,
     async create(client, data) {
       const answer = await client.call('POST', path, data, {scope});
@@ -80,6 +83,7 @@ const priceLists = {
   group: 'trunks',
   label: 'price list',
   scope: 'trunks',
+  nameField: 'name',
   async read(client) {
     const out = [];
     for (const p of listOf(await client.call('GET', PRICES, undefined, {scope: 'trunks'}))) {
@@ -139,6 +143,7 @@ const dialplans = {
   group: 'routing',
   label: 'dialplan',
   scope: 'dialplan',
+  nameField: 'name',
   async read(client) {
     const out = [];
     for (const r of listOf(await client.call('GET', DIALPLANS, undefined, {scope: 'dialplan'}))) {
@@ -165,6 +170,8 @@ const dialplans = {
     };
     await client.call('PUT', apiPath`/PBX/Dialplans/${id}/`, body, {scope: 'dialplan'});
   },
+  // Dialplans point at each other (Goto, includes): a new one is made empty, then written whole.
+  twoPass: {bare: (data) => ({name: data.name, description: data.description ?? ''})},
 };
 
 const GS = '/Dialplan/GeneralSettings/';
@@ -184,16 +191,20 @@ const dialplanSettings = {
   },
 };
 
-export const TRANSFER_KINDS = {
-  'acl-groups': listed({
-    group: 'users',
-    label: 'ACL group',
-    path: '/PBX/AclGroups/',
-    scope: 'aclgroups',
-    nameField: 'name',
-    strip: ['wcgrp'], // a number the PBX gives each group, unique on it (checked live): never carried
-    postAnswers: 'object',
-  }),
+const PBX_KINDS = {
+  'acl-groups': {
+    ...listed({
+      group: 'users',
+      label: 'ACL group',
+      path: '/PBX/AclGroups/',
+      scope: 'aclgroups',
+      nameField: 'name',
+      strip: ['wcgrp'], // a number the PBX gives each group, unique on it (checked live): never carried
+      postAnswers: 'object',
+    }),
+    // Groups point at each other (rules, inherits): a new one is made with its name only, then written whole.
+    twoPass: {bare: (data) => ({name: data.name})},
+  },
   users,
   'trunks-sip': listed({
     group: 'trunks',
@@ -245,12 +256,39 @@ export const TRANSFER_KINDS = {
   'dialplan-settings': dialplanSettings,
 };
 
-// The objects of each kind: {[kind]: [{id, name, data}]}, or {error} for a kind the PBX refuses to give.
-export async function readKinds(client, kinds, {dbFamilies, info = () => {}} = {}) {
+// Every kind: the PBX kinds (side 'pbx': they work with the PBX client, with their portable hook if they have one),
+// then the cloud kinds (each names its service).
+export const TRANSFER_KINDS = {
+  ...Object.fromEntries(
+    Object.entries(PBX_KINDS).map(([name, kind]) => [
+      name,
+      {...kind, side: 'pbx', ...(PBX_PORTABLE[name] ? {portable: PBX_PORTABLE[name]} : {})},
+    ]),
+  ),
+  ...CLOUD_KINDS,
+};
+
+// The client a kind works with, from the clients bag {pbx, wilma?, kb?, integrations?, kite?, stream?}.
+// A kind of the cloud (lookups too); the kinds an export carries (every one but the lookups, tables of the target).
+export const isCloud = (kind) => TRANSFER_KINDS[kind]?.side === 'cloud';
+export const isLookup = (kind) => Boolean(TRANSFER_KINDS[kind]?.lookup);
+export const EXPORTED = Object.keys(TRANSFER_KINDS).filter((k) => !isLookup(k));
+
+export function clientOf(kind, clients) {
+  const name = kind.side === 'cloud' ? kind.service : 'pbx';
+  const client = clients?.[name];
+  if (!client) throw new Error(`No ${name} client for the ${kind.label ?? name} objects`);
+  return client;
+}
+
+// The objects of each kind: {[kind]: [{id, name, data}]}, or {error} for a kind the PBX refuses to give. dbFamilies:
+// the families of the dialplan database to read; userQuery: {ids?, emails?}, the x-bees users to look up.
+export async function readKinds(clients, kinds, {dbFamilies, userQuery, info = () => {}} = {}) {
   const out = {};
   for (const kind of kinds) {
+    const client = clientOf(TRANSFER_KINDS[kind], clients);
     try {
-      out[kind] = await TRANSFER_KINDS[kind].read(client, {dbFamilies});
+      out[kind] = await TRANSFER_KINDS[kind].read(client, {dbFamilies, userQuery});
     } catch (e) {
       if (accessRefused(e)) throw e;
       info(`${kind}: not read (${e.message})`);

@@ -163,3 +163,14 @@ test('WIM integrations: the key of a key and secret pair and a Nango connection 
   assert.deepEqual(maskCloud({key: 'hubspot', version: 2}), {key: 'hubspot', version: 2});
   assert.deepEqual(maskCloud({connectionId: 'conn-1', name: 'x'}), {connectionId: 'conn-1', name: 'x'});
 });
+
+test('a voice URI that names a Wilma secret (apiKey=secrets:<id>) is a reference: shown', () => {
+  const voice = 'elevenlabs://21m00Tcm4TlvDq8ikWAM?model=eleven_flash_v2_5&apiKey=secrets:Ab12Cd34&speed=1.1';
+  assert.equal(maskCloud({voice}).voice, voice);
+  assert.equal(maskCloud({voice: 'x://v?apiKey=secrets:{0}'}).voice, 'x://v?apiKey=secrets:{0}');
+  assert.equal(maskCloud({voice: 'x://v?apiKey=secrets:Ab12/../k'}).voice, `x://v?apiKey=${MASK}`);
+  assert.equal(maskCloud({voice: 'x://v?apiKey=sk-secrets:1'}).voice, `x://v?apiKey=${MASK}`);
+  // Only the TTS shape (apiKey=): a token, key or secret that names a secret id stays masked.
+  for (const k of ['token', 'key', 'secret', 'api_key', 'access_token'])
+    assert.equal(maskCloud({url: `https://h.example/in?${k}=secrets:abc`}).url, `https://h.example/in?${k}=${MASK}`);
+});

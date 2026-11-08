@@ -6,6 +6,7 @@
 //   GET|PUT /PBX/settings/ntp/, GET|PUT /PBX/settings/httpProxy/      scope pbx
 //   GET|PUT /PBX/settings/smtp/, POST /PBX/settings/smtp/test/,
 //   GET /PBX/settings/smtp/test/status/{testId}/                      scope smtp
+//   GET /Network/Pbxes (not in the public OpenAPI)                    scope pbx (guessed)
 //   GET|PUT /PBX/settings/trusted-ips/                                scope security (guessed; the spec says /TrustedIP/,
 //                                                                     which answers 404: the path of its curl sample works)
 //   GET|POST /PBX/Upgrade/, GET|POST|… /PBX/Upgrade/Check/, GET /PBX/Upgrade/Settings/   scope pbx
@@ -14,7 +15,7 @@
 import {UsageError} from 'wldx-core/errors';
 import {localTime, oneLine, paint, table} from 'wldx-core/format';
 import {apiPath} from 'wldx-core/http';
-import {pbxClient} from '../pbx.mjs';
+import {PbxError, pbxClient} from '../pbx.mjs';
 import {readSecret} from 'wldx-core/secret';
 
 // The features PUT /PBX/settings/ takes (one per request).
@@ -539,6 +540,55 @@ export const groups = {
                 ]),
               )
             : 'No ports checked';
+        },
+      },
+      network: {
+        summary: 'the PBXs of the WMS network of this PBX: role, version, failover, whether an update is needed',
+        usage: 'wx-admin system network',
+        details:
+          'The current PBX is marked with *. A PBX that is alone answers with itself. Not in the public OpenAPI. With ' +
+          '--output json the records are as the PBX gives them (ip, serial, host, isServer, port, failOver, version, ' +
+          'isUpdateNeeded, dn).',
+        options: {},
+        args: [0, 0],
+        async run(ctx) {
+          const client = await pbxClient(ctx);
+          let answer;
+          try {
+            // No scope in the spec; /PBX/settings/ (which holds wmsNetworkRole) is pbx, so this is too (guessed).
+            answer = await client.call('GET', '/Network/Pbxes', undefined, {scope: 'pbx'});
+          } catch (e) {
+            // 401 stays an access error. 403 is "not available with this access", still a refused access (exit 2),
+            // with the hint of the PBX client (the scope it needs); 404, an ordinary failure (exit 1).
+            const prefix = `the WMS network is not available with this access (${e.status})`;
+            if (e.status === 403) throw Object.assign(new PbxError(`${prefix}: ${e.message}`, 403), {cause: e});
+            if (e.status === 404) throw new Error(prefix, {cause: e});
+            throw e;
+          }
+          const out = answer ?? {records: []};
+          // The host of the current PBX for the text, kept out of the JSON (the records go as they come).
+          Object.defineProperty(out, 'current', {value: client.target.host, enumerable: false});
+          return out;
+        },
+        text: (r, ctx) => {
+          const c = paint(ctx);
+          const records = r?.records ?? [];
+          if (!records.length) return 'No PBXs in the WMS network';
+          const mark = (p) => (String(p.host).toLowerCase() === String(r.current).toLowerCase() ? '*' : ' ');
+          return [
+            ...table([
+              ['  host', 'serial', 'version', 'role', 'failover', 'update needed'],
+              ...records.map((p) => [
+                `${mark(p)} ${p.host ?? ''}`,
+                p.serial ?? '',
+                p.version ?? '',
+                p.isServer ? 'server' : 'member',
+                p.failOver ?? '',
+                p.isUpdateNeeded ? c.red('yes') : '',
+              ]),
+            ]),
+            ...(records.length === 1 ? [c.dim('This PBX is not in a WMS network with other PBXs.')] : []),
+          ];
         },
       },
       upgrade: {

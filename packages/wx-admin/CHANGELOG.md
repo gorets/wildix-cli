@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+
+- Added: `wx-admin config export|import|copy` carry the cloud of the company besides the PBX configuration. Kinds, by
+  group. Wilma: agents, skills with their files, tools, connectors, secrets, shared connections. Knowledge base: data
+  sources and knowledge bases. Integrations: HTTP webhooks, iframe apps, CRM settings (update only). Kite: widgets and
+  channels. `--cloud` brings them in (opt-in; `--all` means what it meant); `--only <cloud kind>:NAME` works without
+  `--cloud`. `--map FILE` is JSON, per kind, `from -> to` names (`{"xbees-services": {"Sales": "Vendite"},
+  "xbees-users": {"anna@x.example": "anna@y.example"}, "kite-channels": {"sms:+39...": "sms:+44..."}}`): it renames
+  references and the Kite channels themselves; what is missing on the target is `blocked` with a ready fragment in the
+  next steps. A secret is never exported. `--secrets FILE` takes the real paths: `value` (Wilma secret),
+  `config.confluence.apiKey` (KB source), `secret` (webhook) and a header of a tool or connector,
+  `<path>.customHeaders.<name>` (e.g. `handler.mcp.authorization.customHeaders.X-Api-Key`). With no value: a Wilma
+  secret is created pending; a KB source is created unconfigured; a webhook gets a signing secret made by wx-admin,
+  printed once (with `--output json`, in `generatedSecrets` of the result; never in the log); a tool or connector with a
+  missing header, an agent with a missing SQS key or sandbox env value, or a skill with a missing sandbox env value, is
+  skipped. A `--secrets` value that is the mask `********` is refused. An overwrite never replaces the secret of the
+  target unless a value is given. References become markers (a Wilma secret named by `secretId` in a connector's
+  configuration, as the webhook connector's `auth`, too): the ACL groups, dialplans and music on hold of the PBX are
+  found on the target; x-bees users are looked up in the Stream directory by e-mail (in any case; only the users of the
+  company count, and a value that is not an e-mail is not looked up), services by the title of the call group, bots by
+  name. Who may use an agent or edit a skill, and who sees an app: a user or ACL group that is not one of the source is
+  dropped with a warning. A versioned object carries its published version and a different draft; an agent that has a
+  deployment is deployed at 100%. The log names the steps of each cloud write (`[create, publish, deploy, draft]`). A
+  new KB source does not sync by itself: the next steps give its `wx-admin kb source sync` command. A
+  copy inside one company leaves the cloud out; an export from another environment gets a warning; a file holding masked
+  values is refused. `wilma agent get` now shows `apiKey=secrets:<id>` in voice URIs: the id of a secret reference, not
+  the secret.
+- Not here: USER connections, Nango and Microsoft installs, the integrations hub, Omni and hub webhooks, SQS webhooks;
+  KB documents; version history and deployment splits; agent API keys; voicebots and WIM tools; x-bees chat bots
+  (only matched by name); deletes; `config backup|diff` (no cloud kinds). A version pin between new agents that point
+  at each other is not resolved in one run: both are skipped with a reason, re-run after the first import.
+- Checked live (stage): the export of a company with every cloud kind (agents, skills with a file, tools, connectors,
+  secrets, connections, KB sources and bases, HTTP webhooks, apps, CRM settings, widgets and SMS numbers): no secret
+  value in the folder, Nango-bound sources left out, user references found in the Stream directory (it matches
+  e-mails in any case and answers the users of every company). Only with tests: the plan and every write of an import
+  or copy (the round trip on a test PBX is pending), the writes of the Kite channels and of the CRM settings.
+- Added: `wx-admin system network`: the PBXs of the WMS network of this PBX (host, serial, version, server or member, failover, update needed), the current one marked; a lone PBX says it is not in a network. `--output json` gives the records as the PBX answers (with `ip` and `dn`). A 403 or 404 says the WMS network is not available with this access: a 403 keeps the scope hint and exits 2, a 404 exits 1. The endpoint, `GET /Network/Pbxes`, is not in the public OpenAPI (probed live; scope `pbx`, a guess).
+
 ## 1.7.0 — 2026-11-08
 
 - Added: `wx-admin kite`, Kite (the chat widgets x-bees puts on websites) and the customer messaging channels of the

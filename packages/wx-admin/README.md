@@ -217,6 +217,7 @@ The PBX itself: version, license, settings (features, SMTP, NTP, proxy, trusted 
 | `wx-admin system trusted-ip` | the trusted IP addresses of the PBX |
 | `wx-admin system trusted-ip-set [--add IP]... [--remove IP]... [--clear] --yes` | add or remove trusted IP addresses (needs --yes: the security of the whole PBX) |
 | `wx-admin system ports` | whether the ports of the PBX are open from outside (HTTP, SIP, RTP), as last checked |
+| `wx-admin system network` | the PBXs of the WMS network of this PBX: role, version, failover, whether an update is needed |
 | `wx-admin system upgrade` | the state of the last upgrade of the PBX and its log |
 | `wx-admin system upgrade-check [--status] [--wait SECONDS]` | look for a new WMS version and packages (runs the check on the PBX and waits for it) |
 | `wx-admin system upgrade-settings` | how the PBX upgrades: repository, automatic upgrades, custom firmware server |
@@ -442,14 +443,14 @@ What calls leave behind: the call history, call recordings, voicemails.
 
 ### wx-admin config
 
-The configuration as files: back up and compare; export, import and copy settings to another PBX (users, routing, trunks).
+The configuration as files: back up and compare; export, import and copy settings to another PBX (users, routing, trunks; with --cloud, the cloud of its company).
 
 | Command | What it does |
 | --- | --- |
 | `wx-admin config backup --to DIR [--only KIND,KIND…]` | write the configuration of the PBX to a new folder, one JSON file per object (passwords masked) |
-| `wx-admin config import <dir> [--all \| --only KIND:NAME,…] [--overwrite] [--secrets FILE] [--dry-run] [--yes] [--log DIR]` | write a config export to this PBX: a plan, what to write (chosen), the passwords, a log and what is left to do |
-| `wx-admin config copy --from PBX --to PBX [--all \| --only KIND:NAME,…] [--users] [--overwrite] [--secrets FILE] [--dry-run] [--yes] [--log DIR]` | carry the configuration of one PBX to another: export in memory, then import (plan, choice, log) |
-| `wx-admin config export --to DIR [--all \| --only KIND:NAME,…] [--users] [--db-family FAMILY]...` | choose what to carry to another PBX and write it to a new folder, without anything bound to this PBX |
+| `wx-admin config import <dir> [--all \| --only KIND:NAME,…] [--cloud] [--overwrite] [--map FILE] [--secrets FILE] [--dry-run] [--yes] [--log DIR]` | write a config export to this PBX: a plan, what to write (chosen), the passwords, a log and what is left to do |
+| `wx-admin config copy --from PBX --to PBX [--all \| --only KIND:NAME,…] [--users] [--cloud] [--overwrite] [--map FILE] [--secrets FILE] [--dry-run] [--yes] [--log DIR]` | carry the configuration of one PBX to another: export in memory, then import (plan, choice, log) |
+| `wx-admin config export --to DIR [--all \| --only KIND:NAME,…] [--users] [--cloud] [--db-family FAMILY]...` | choose what to carry to another PBX and write it to a new folder, without anything bound to this PBX |
 | `wx-admin config diff (<dir> \| --with PBX) [--only KIND,KIND…]` | what differs between a backup folder (or another PBX) and the PBX |
 
 ### wx-admin kb

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
+import {TRANSFER_KINDS} from '../src/transfer/kinds.mjs';
+import {PBX_PORTABLE} from '../src/transfer/pbx-portable.mjs';
 import {fromPortable, refsOf, toPortable} from '../src/transfer/refs.mjs';
 
 const SOURCE = {serial: '2211000000AB', host: 'a.wildixin.com'};
@@ -300,4 +302,288 @@ test('review 8: a pbxid of another PBX stays literal and is unresolved; without 
   assert.ok(p.unresolved.some((u) => u.value === 'pbxid=cccc00000009,dc=wildix'));
   const q = toPortable(snapshot(), {serial: null, host: SOURCE.host});
   assert.ok(!JSON.stringify(q.kinds).includes('$self'));
+});
+
+test('the portable hooks of the PBX kinds are on their kinds, and toPortable drives a kind through its hook', (t) => {
+  for (const [kind, hook] of Object.entries(PBX_PORTABLE)) assert.equal(TRANSFER_KINDS[kind].portable, hook, kind);
+  assert.deepEqual(Object.keys(PBX_PORTABLE).sort(), [
+    'acl-groups',
+    'dialplans',
+    'queues',
+    'trunk-groups',
+    'trunks-sip',
+    'users',
+  ]);
+  const saved = TRANSFER_KINDS.ivr.portable;
+  t.after(() => {
+    if (saved) TRANSFER_KINDS.ivr.portable = saved;
+    else delete TRANSFER_KINDS.ivr.portable;
+  });
+  TRANSFER_KINDS.ivr.portable = (data, h) => {
+    data.next = h.ref(data.next, 'switches', 'next', ['name']);
+    h.secret(data, 'pin', 'pin');
+    h.soft('users/100');
+  };
+  const p = toPortable(
+    {
+      switches: [{id: '1', name: 'night', data: {title: 'night'}}],
+      ivr: [{id: '2', name: 'menu', data: {title: 'menu', next: 'night', pin: '1234'}}],
+    },
+    SOURCE,
+  );
+  assert.deepEqual(p.kinds.ivr[0].data, {
+    title: 'menu',
+    next: {$ref: 'switches/night', as: 'name'},
+    pin: {$secret: 'pin'},
+  });
+  assert.deepEqual(p.needs['ivr/menu'], ['switches/night']);
+  assert.deepEqual(p.soft['ivr/menu'], ['users/100']);
+});
+
+// Fake kinds (cloud side, service `fake`), registered for one test.
+function fakeKind(t, name, extra = {}) {
+  TRANSFER_KINDS[name] = {group: 'test', label: name, side: 'cloud', service: 'fake', read: async () => [], ...extra};
+  t.after(() => delete TRANSFER_KINDS[name]);
+}
+
+test('cloud object changed by maskCloud is bound', async (t) => {
+  fakeKind(t, 'test-hooks', {
+    portable(data, h) {
+      h.secret(data.handler, 'token', 'handler.token');
+      data.owner = h.ref(data.owner, 'test-hooks', 'owner', ['name']);
+    },
+  });
+  const p = toPortable(
+    {
+      'test-hooks': [
+        {
+          id: '1',
+          name: 'leaky',
+          data: {owner: 'clean', handler: {url: 'https://x.example/', token: 't', customHeaders: {'X-Key': 'v'}}},
+        },
+        {id: '2', name: 'clean', data: {owner: 'clean', handler: {url: 'https://x.example/', token: 't'}}},
+      ],
+    },
+    SOURCE,
+  );
+  assert.deepEqual(p.bound, [
+    {kind: 'test-hooks', name: 'leaky', path: 'handler.customHeaders.X-Key', found: 'secret'},
+  ]);
+  assert.deepEqual(
+    p.kinds['test-hooks'].map((o) => o.name),
+    ['leaky', 'clean'],
+  );
+  assert.deepEqual(p.kinds['test-hooks'][1].data.handler.token, {$secret: 'handler.token'});
+  const {chooseExport} = await import('../src/transfer/selection.mjs');
+  assert.deepEqual([...(await chooseExport(p, {all: true, cloud: true}, {interactive: false}))], ['test-hooks/clean']);
+  const {boundText} = await import('../src/transfer/refs.mjs');
+  assert.equal(boundText(p.bound[0]), 'secret field handler.customHeaders.X-Key not known');
+});
+
+test('h.bound marks the object bound with the hook reason', async (t) => {
+  fakeKind(t, 'test-nango', {
+    portable(data, h) {
+      h.bound('config.gdrive.nangoConnectionId', 'nango');
+      delete data.id;
+    },
+  });
+  const p = toPortable({'test-nango': [{id: '1', name: 'drive', data: {id: 'conn-1'}}]}, SOURCE);
+  assert.deepEqual(p.bound, [
+    {kind: 'test-nango', name: 'drive', path: 'config.gdrive.nangoConnectionId', found: 'nango'},
+  ]);
+  const {boundText} = await import('../src/transfer/refs.mjs');
+  assert.equal(boundText(p.bound[0]), 'bound to a Nango connection of the source (config.gdrive.nangoConnectionId)');
+});
+
+test('a PBX kind is not checked by the mask', () => {
+  const p = toPortable({ivr: [{id: '1', name: 'm', data: {title: 'm', customHeaders: {'X-Key': 'v'}}}]}, SOURCE);
+  assert.deepEqual(p.bound, []);
+});
+
+test('company id in a string is bound', () => {
+  const p = toPortable(
+    {
+      ivr: [
+        {id: '1', name: 'm', data: {title: 'm', url: 'https://hooks.example/IT_X/in'}},
+        {id: '2', name: 'n', data: {title: 'n', url: 'https://hooks.example/it_y/in'}},
+      ],
+    },
+    {...SOURCE, company: 'it_x'},
+  );
+  assert.deepEqual(p.bound, [{kind: 'ivr', name: 'm', path: 'url', found: 'company'}]);
+});
+
+// An agent pinned to a version of a tool; the hook deletes the pin when h.version answers undefined.
+function pinned(t) {
+  fakeKind(t, 'test-tools');
+  fakeKind(t, 'test-agents', {
+    portable(data, h) {
+      const v = h.version('test-tools', data.tool, data.toolVersion, 'toolVersion');
+      if (v === undefined) delete data.toolVersion;
+      else data.toolVersion = v;
+    },
+  });
+  return toPortable(
+    {
+      'test-tools': [{id: 't1', name: 'lookup', version: 3, data: {}}],
+      'test-agents': [
+        {id: 'a1', name: 'latest', data: {tool: 'lookup', toolVersion: '3'}},
+        {id: 'a2', name: 'older', data: {tool: 'lookup', toolVersion: 2}},
+      ],
+    },
+    SOURCE,
+  );
+}
+
+test('version pin equal to latest becomes a version ref', (t) => {
+  const p = pinned(t);
+  assert.deepEqual(p.kinds['test-agents'][0].data, {
+    tool: 'lookup',
+    toolVersion: {$ref: 'test-tools/lookup', as: 'version'},
+  });
+  assert.deepEqual(p.needs['test-agents/latest'], ['test-tools/lookup']);
+});
+
+test('older pin is dropped with a warning', async (t) => {
+  const p = pinned(t);
+  assert.deepEqual(p.kinds['test-agents'][1].data, {tool: 'lookup'});
+  assert.deepEqual(p.warnings, [
+    {kind: 'test-agents', name: 'older', path: 'toolVersion', text: 'pinned to an older version, dropped'},
+  ]);
+  assert.equal(p.needs['test-agents/older'], undefined);
+  const {selectFrom} = await import('../src/transfer/selection.mjs');
+  assert.deepEqual(selectFrom(p, new Set(['test-agents/latest'])).warnings, []);
+  assert.deepEqual(selectFrom(p, new Set(['test-agents/older'])).warnings, p.warnings);
+});
+
+test('lookup kinds are indexed, not exported', (t) => {
+  fakeKind(t, 'test-people', {lookup: true});
+  fakeKind(t, 'test-agents', {
+    portable(data, h) {
+      data.owner = h.ref(data.owner, 'test-people', 'owner');
+    },
+  });
+  const p = toPortable(
+    {
+      'test-people': [{id: 'u1', name: 'ann@x.example', data: {email: 'ann@x.example'}}],
+      'test-agents': [{id: 'a1', name: 'bot', data: {owner: 'u1'}}],
+    },
+    SOURCE,
+  );
+  assert.deepEqual(Object.keys(p.kinds), ['test-agents']);
+  assert.deepEqual(p.kinds['test-agents'][0].data.owner, {$ref: 'test-people/ann@x.example', as: 'id'});
+  assert.deepEqual(p.needs['test-agents/bot'], ['test-people/ann@x.example']);
+});
+
+test('fix 1: a secret in the value of an $external marker is bound at the marker path', async (t) => {
+  fakeKind(t, 'test-hooks', {
+    portable(data, h) {
+      data.hook = h.external('hook', 'url', data.hook);
+    },
+  });
+  const p = toPortable(
+    {
+      'test-hooks': [
+        {id: '1', name: 'leaky', data: {hook: 'https://e.example/in?token=abc'}},
+        {id: '2', name: 'clean', data: {hook: 'https://e.example/in'}},
+      ],
+    },
+    SOURCE,
+  );
+  assert.deepEqual(p.bound, [{kind: 'test-hooks', name: 'leaky', path: 'hook', found: 'secret'}]);
+  const {chooseExport} = await import('../src/transfer/selection.mjs');
+  assert.deepEqual([...(await chooseExport(p, {all: true, cloud: true}, {interactive: false}))], ['test-hooks/clean']);
+});
+
+test('fix 1: a marker next to a plain secret does not hide it', (t) => {
+  fakeKind(t, 'test-hooks', {
+    portable(data, h) {
+      h.secret(data.auth, 'secret', 'auth.secret');
+    },
+  });
+  const p = toPortable(
+    {'test-hooks': [{id: '1', name: 'pair', data: {auth: {secret: 's', password: 'plain'}}}]},
+    SOURCE,
+  );
+  assert.deepEqual(p.kinds['test-hooks'][0].data.auth.secret, {$secret: 'auth.secret'});
+  assert.deepEqual(p.bound, [{kind: 'test-hooks', name: 'pair', path: 'auth.password', found: 'secret'}]);
+});
+
+// A voice URI that names a secret in its query: the reference becomes an argument of a $template.
+const VOICE_KEY = /[?&]apiKey=secrets:([A-Za-z0-9_-]+)/g;
+function voices(t, list) {
+  fakeKind(t, 'test-secrets');
+  fakeKind(t, 'test-voices', {
+    portable(data, h) {
+      data.voice = h.template(data.voice, 'voice', VOICE_KEY, 'test-secrets', ['id']);
+    },
+  });
+  return toPortable(
+    {
+      'test-secrets': [{id: 'S1', name: 'eleven', data: {}}],
+      'test-voices': list.map(([name, voice], i) => ({id: `v${i}`, name, data: {voice}})),
+    },
+    SOURCE,
+  );
+}
+
+test('a reference inside a string is a $template: its args are references, put back by fromPortable', (t) => {
+  const p = voices(t, [
+    ['own', 'elevenlabs://abc?model=x&apiKey=secrets:S1'],
+    ['braces', 'x://{0}?apiKey=secrets:S1&b={}'],
+    ['gone', 'elevenlabs://abc?apiKey=secrets:S9'],
+    ['plain', 'google://en-US-Chirp3-HD-Aoede'],
+  ]);
+  const [own, braces, gone, plain] = p.kinds['test-voices'].map((o) => o.data.voice);
+  const ref = {$ref: 'test-secrets/eleven', as: 'id'};
+  assert.deepEqual(own, {$template: 'elevenlabs://abc?model=x&apiKey=secrets:{0}', args: [ref]});
+  assert.deepEqual(braces, {$template: 'x://{{0}}?apiKey=secrets:{0}&b={{}}', args: [ref]});
+  assert.equal(gone, 'elevenlabs://abc?apiKey=secrets:S9');
+  assert.equal(plain, 'google://en-US-Chirp3-HD-Aoede');
+  assert.deepEqual(p.unresolved, [{kind: 'test-voices', name: 'gone', path: 'voice', value: 'S9'}]);
+  assert.deepEqual(p.needs, {
+    'test-voices/own': ['test-secrets/eleven'],
+    'test-voices/braces': ['test-secrets/eleven'],
+  });
+  assert.deepEqual(refsOf({voice: own}), [{kind: 'test-secrets', name: 'eleven', path: 'voice.args[0]'}]);
+  // The mask takes a reference to a Wilma secret for what it is: nothing is bound.
+  assert.deepEqual(p.bound, []);
+
+  const resolve = ({kind, name, as}) =>
+    kind === 'test-secrets' && name === 'eleven' && as === 'id' ? 'T7' : undefined;
+  assert.equal(fromPortable('test-voices', own, resolve), 'elevenlabs://abc?model=x&apiKey=secrets:T7');
+  assert.equal(fromPortable('test-voices', braces, resolve), 'x://{0}?apiKey=secrets:T7&b={}');
+  assert.throws(() => fromPortable('test-voices', own, () => undefined), /test-secrets\/eleven is not on the target/);
+});
+
+test('the safety net checks the string of a $template; the serial in it binds the object', (t) => {
+  const p = voices(t, [
+    ['leaky', 'elevenlabs://abc?token=tk-1&apiKey=secrets:S1'],
+    ['serial', `elevenlabs://${SOURCE.serial}?apiKey=secrets:S1`],
+  ]);
+  assert.deepEqual(p.kinds['test-voices'][0].data.voice.$template, 'elevenlabs://abc?token=tk-1&apiKey=secrets:{0}');
+  assert.deepEqual(p.bound, [
+    {kind: 'test-voices', name: 'leaky', path: 'voice', found: 'secret'},
+    {kind: 'test-voices', name: 'serial', path: 'voice', found: 'serial'},
+  ]);
+});
+
+test('a cloud object whose name the mask changes goes by the masked name and is bound', () => {
+  const p = toPortable(
+    {
+      'kite-channels': [{id: 'sms:1', name: 'sms:+3902?token=Tok3nInName', data: {routes: []}}],
+      'wilma-secrets': [{id: 'S1', name: 'plain', data: {name: 'plain'}}],
+    },
+    SOURCE,
+  );
+  assert.deepEqual(
+    p.kinds['kite-channels'].map((o) => o.name),
+    ['sms:+3902?token=********'],
+  );
+  assert.deepEqual(p.bound, [{kind: 'kite-channels', name: 'sms:+3902?token=********', path: 'name', found: 'secret'}]);
+  assert.ok(!JSON.stringify(p).includes('Tok3nInName'));
+  assert.deepEqual(
+    p.kinds['wilma-secrets'].map((o) => o.name),
+    ['plain'],
+  );
 });

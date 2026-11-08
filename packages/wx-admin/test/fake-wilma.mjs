@@ -1,6 +1,8 @@
 // Wilma in memory, behind fakeCloud: the objects of a company and the answers of its operations, shaped as the
 // service answers them ({agents, nextCursor}, {agent}, …). Lists are paged by `limit` and a numeric `cursor`; an update
-// with another `revision` than the stored one is a 409, as optimistic locking does.
+// with another `revision` than the stored one is a 409, as optimistic locking does; a publish of a draft equal to its
+// latest version is a 409 NothingToPublishException. As the live service does, the type of an error is only in the
+// `x-amzn-errortype` header; the body is {message}.
 //   state = {agents, skills, tools, connectors, secrets, connections: [objects with id],
 //            definitions: [connector definitions], versions: {[id]: [{version, definition, …}]},
 //            deployments: {[agentId]: [{version, percentage}]}, keys: {[agentId]: [{id, name, prefix}]},
@@ -19,6 +21,24 @@ const VERSIONED = [
   ['skills', /^\/v2\/skills\/items\/([^/]+)/, 'skillId'],
   ['tools', /^\/v2\/tools\/items\/([^/]+)/, 'toolId'],
 ];
+
+// A 409 as live Wilma answers it: the type in the header (with the suffix it carries), the message in the body.
+const conflict = (type, message) => ({
+  status: 409,
+  headers: {'x-amzn-errortype': `${type}:http://internal.amazon.com/coral/wildix.wilma/`},
+  body: {message},
+});
+
+// A draft unchanged since its latest version (what is not the definition aside): nothing to publish.
+const META = ['id', 'companyId', 'revision', 'status', 'latestVersion', 'draftBaseVersion', 'createdAt', 'updatedAt'];
+const definitionOf = (o) =>
+  JSON.stringify(
+    Object.keys(o)
+      .filter((k) => !META.includes(k))
+      .sort()
+      .map((k) => [k, o[k]]),
+  );
+const sameDefinition = (a, b) => definitionOf(a) === definitionOf(b);
 
 const page = (items, q, key) => {
   const start = Number(q.cursor ?? 0);
@@ -58,7 +78,10 @@ export function fakeWilma(state) {
       const versions = (state.versions[id] ??= []);
       if (rest === '/versions' && method === 'GET') return {body: page(versions, q, 'versions')};
       if (rest === '/versions' && method === 'POST') {
-        if (body.revision !== obj.revision) return {status: 409, body: {message: 'Revision mismatch'}};
+        if (body.revision !== obj.revision) return conflict('RevisionConflictException', 'Revision mismatch');
+        const latest = versions.find((v) => v.version === obj.latestVersion);
+        if (latest && sameDefinition(obj, latest.definition))
+          return conflict('NothingToPublishException', 'There is nothing new to publish.');
         const v = {
           [idKey]: id,
           version: versions.length + 1,
@@ -78,7 +101,7 @@ export function fakeWilma(state) {
       if ((m = rest.match(/^\/versions\/(\d+)\/draft$/)) && method === 'POST') {
         const v = versions.find((x) => x.version === Number(m[1]));
         if (!v) return {status: 404, body: {message: 'No such version'}};
-        if (body.revision !== obj.revision) return {status: 409, body: {message: 'Revision mismatch'}};
+        if (body.revision !== obj.revision) return conflict('RevisionConflictException', 'Revision mismatch');
         Object.assign(obj, v.definition, {revision: obj.revision + 1, draftBaseVersion: v.version});
         return {body: {[coll.slice(0, -1)]: obj}};
       }
@@ -179,6 +202,7 @@ export function fakeWilma(state) {
           const {value, ...rest} = body;
           const obj = {
             id: newId(coll === 'secrets' || coll === 'connections' ? 8 : 12),
+            ...(coll === 'connections' ? {type: 'shared'} : {}), // CreateConnection makes SHARED ones only
             ...rest,
             revision: 0,
             status: 'draft',
@@ -194,7 +218,7 @@ export function fakeWilma(state) {
       if (method === 'GET') return {body: {[itemKey]: obj}};
       if (method === 'PUT') {
         if ('revision' in body && body.revision !== obj.revision)
-          return {status: 409, body: {message: 'Revision mismatch'}};
+          return conflict('RevisionConflictException', 'Revision mismatch');
         Object.assign(obj, body, {revision: (obj.revision ?? 0) + 1});
         return {body: {[itemKey]: obj}};
       }

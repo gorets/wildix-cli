@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
-import {readKinds, TRANSFER_KINDS} from '../src/transfer/kinds.mjs';
+import {CLOUD_KINDS} from '../src/transfer/cloud/index.mjs';
+import {clientOf as kindClient, readKinds, TRANSFER_KINDS} from '../src/transfer/kinds.mjs';
 import {clientOf, fakePbx} from './fake-pbx.mjs';
+
+const PBX_KINDS = Object.keys(TRANSFER_KINDS).filter((k) => !Object.hasOwn(CLOUD_KINDS, k));
 
 const state = () => ({
   '/PBX/AclGroups/': [
@@ -37,7 +40,7 @@ const state = () => ({
 
 test('every kind reads its objects by name, without ids, dns and runtime fields', async () => {
   const pbx = fakePbx(state());
-  const all = await readKinds(await clientOf(pbx), Object.keys(TRANSFER_KINDS));
+  const all = await readKinds({pbx: await clientOf(pbx)}, PBX_KINDS);
   assert.deepEqual(
     all['acl-groups'].map((o) => [o.id, o.name, o.data.dn, o.data.id]),
     [['7', 'Sales', undefined, undefined]],
@@ -60,7 +63,7 @@ test('every kind reads its objects by name, without ids, dns and runtime fields'
 
 test('users are read over every page and keep no field bound to their PBX', async () => {
   const pbx = fakePbx(state());
-  const {users} = await readKinds(await clientOf(pbx), ['users']);
+  const {users} = await readKinds({pbx: await clientOf(pbx)}, ['users']);
   assert.equal(users.length, 2500);
   assert.equal(users[0].name, '1000');
   for (const k of ['id', 'dn', 'sourceId', 'jid', 'pbx', 'pbxDn', 'login', 'password', 'sipPassword'])
@@ -72,7 +75,7 @@ test('users are read over every page and keep no field bound to their PBX', asyn
 test('an unreadable kind is {error}, not missing', async () => {
   const s = state();
   delete s['/Trunks/Sip/'];
-  const all = await readKinds(await clientOf(fakePbx(s)), ['trunks-sip', 'queues']);
+  const all = await readKinds({pbx: await clientOf(fakePbx(s))}, ['trunks-sip', 'queues']);
   assert.match(all['trunks-sip'].error, /Access error/);
   assert.equal(all.queues.length, 1);
 });
@@ -121,9 +124,44 @@ test('dialplan-db: the keys of the families asked for, by family/key; a key is w
   const s = {...state(), '/Dialplan/DB/fam/': {records: [{key: '/fam/a/b', value: '1'}]}};
   const pbx = fakePbx(s);
   const client = await clientOf(pbx);
-  const all = await readKinds(client, ['dialplan-db'], {dbFamilies: ['fam']});
+  const all = await readKinds({pbx: client}, ['dialplan-db'], {dbFamilies: ['fam']});
   assert.deepEqual(all['dialplan-db'], [{id: 'fam/a/b', name: 'fam/a/b', data: {value: '1'}}]);
-  assert.deepEqual((await readKinds(client, ['dialplan-db']))['dialplan-db'], []);
+  assert.deepEqual((await readKinds({pbx: client}, ['dialplan-db']))['dialplan-db'], []);
   assert.equal(await TRANSFER_KINDS['dialplan-db'].create(client, {value: '2'}, 'fam/x'), 'fam/x');
   assert.deepEqual(pbx.state['/Dialplan/DB/fam/x/'], {value: '2'});
+});
+
+test('every PBX kind has side pbx and a client', () => {
+  const P = {target: {host: 'a.wildixin.com'}};
+  for (const k of PBX_KINDS) assert.equal(TRANSFER_KINDS[k].side, 'pbx', k);
+  for (const k of Object.keys(CLOUD_KINDS)) assert.equal(TRANSFER_KINDS[k].side, 'cloud', k);
+  assert.equal(kindClient(TRANSFER_KINDS.queues, {pbx: P}), P);
+  assert.throws(() => kindClient({side: 'cloud', service: 'kb'}, {pbx: P}), /kb client/);
+});
+
+test('one leaf module for keys and markers, one place for isCloud and EXPORTED; the hooks never import the engine', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const {isMarker, keyOf, splitKey} = await import('../src/transfer/keys.mjs');
+  for (const m of ['$ref', '$self', '$secret', '$external', '$file', '$template'])
+    assert.equal(isMarker({[m]: 'x'}), true, m);
+  for (const v of [null, 'x', [], [{$ref: 'a/b'}], {ref: 'a/b'}]) assert.equal(isMarker(v), false, JSON.stringify(v));
+  assert.deepEqual(splitKey(keyOf('wilma-tools', 'a/b')), {kind: 'wilma-tools', name: 'a/b'});
+
+  const src = path.join(import.meta.dirname, '..', 'src');
+  const read = (rel) => fs.readFileSync(path.join(src, rel), 'utf8');
+  const files = [
+    'commands/config.mjs',
+    ...fs.readdirSync(path.join(src, 'transfer'), {recursive: true}).map((f) => path.join('transfer', String(f))),
+  ].filter((f) => f.endsWith('.mjs'));
+  const defines = (re) => files.filter((f) => re.test(read(f)));
+  assert.deepEqual(defines(/const isMarker =/), [path.join('transfer', 'keys.mjs')]);
+  assert.deepEqual(defines(/const isCloud =/), [path.join('transfer', 'kinds.mjs')]);
+  assert.deepEqual(defines(/const EXPORTED =/), [path.join('transfer', 'kinds.mjs')]);
+  assert.deepEqual(defines(/const accessRefused =/), []);
+  assert.match(read('pbx.mjs'), /export const accessRefused =/);
+  // Ruling 6: the hooks of the kinds import neither refs.mjs nor kinds.mjs; keys.mjs imports nothing.
+  for (const f of files.filter((x) => x.includes(`cloud${path.sep}`) || x.endsWith('pbx-portable.mjs')))
+    assert.doesNotMatch(read(f), /from '\.\.?\/(?:\.\.\/)?(?:transfer\/)?(?:refs|kinds)\.mjs'/, f);
+  assert.doesNotMatch(read('transfer/keys.mjs'), /^import /m);
 });

@@ -83,9 +83,15 @@ test/*.test.mjs          node:test against a fake PBX (fetch is injected); test/
   A channel `set --target` keeps the routes (work hours) and actions; `--from` replaces all and needs `--yes`. A number
   with no configuration takes the service whose messaging number it is (as the WIM console does). Not here: what the
   visitors of a widget use (calendar, agents, config, preview), Instagram (refused by the service).
-- **Config transfer:** a reference between objects is a marker (`$ref`, `$self`, `$secret`, `$external`), never
-  an id of the source; a new reference site of a dialplan application is one line of `APP_REFS` (src/transfer/
-  refs.mjs).
+- **Config transfer:** a reference between objects is a marker (`$ref`, `$self`, `$secret`, `$external`, `$file`,
+  `$template`), never an id of the source; a new reference site of a dialplan application is one line of `APP_REFS`
+  (src/transfer/pbx-portable.mjs).
+  A cloud kind (src/transfer/cloud) declares `side`, `service`, `refers`, its secret paths with their empty policy,
+  `nameField`, and `immutable`/`noCreate` where they apply. References are markers, never source ids. A multi-step
+  write goes through `write` and throws `StageError` (src/transfer/stage-error.mjs) with a status-only message, never
+  the service body. An object `maskCloud` changes is `bound`. Lookups are never exported. Modules in
+  src/transfer/cloud (and pbx-portable.mjs) never import refs.mjs or kinds.mjs: keys and markers are in the leaf
+  src/transfer/keys.mjs; `isCloud` and `EXPORTED` in kinds.mjs.
 - **PBX writes** follow the API: a dialplan is written whole; a change that stops calls or cannot be undone needs
   `--yes`. Test against the fake PBX of the tests; live checks only on a test PBX, on objects the test creates and
   deletes.

@@ -54,7 +54,19 @@ export const COMMANDS = {...api, ...cloud, login, logout, status};
 
 // The commands that only read the PBX (no change there, no file written): they may run with --all-pbx.
 const READ_ONLY = {
-  system: ['info', 'license', 'settings', 'smtp', 'ntp', 'proxy', 'trusted-ip', 'ports', 'upgrade', 'upgrade-settings'],
+  system: [
+    'info',
+    'license',
+    'settings',
+    'smtp',
+    'ntp',
+    'proxy',
+    'trusted-ip',
+    'ports',
+    'network',
+    'upgrade',
+    'upgrade-settings',
+  ],
   user: ['list', 'get', 'presence', 'registrations', 'groups', 'departments'],
   acl: ['list', 'get', 'permissions', 'rules'],
   queue: ['list', 'get', 'stats'],

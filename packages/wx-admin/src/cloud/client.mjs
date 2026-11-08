@@ -9,6 +9,16 @@ import {cloudToken} from './token.mjs';
 
 const PATH = /^\/(?!\/)[^\s#\\]*$/;
 
+// The type of a service error (a Smithy exception), without its namespace
+// (wildix.wilma.common#NothingToPublishException → NothingToPublishException): first the `x-amzn-errortype` header,
+// the only place live Wilma names it (`NothingToPublishException:http://internal.amazon.com/…`: the part before the
+// first `:`), else the `__type`, `type`, `code` or `name` field of the JSON body.
+function errorType(header, j) {
+  const h = header?.split(':')[0];
+  const t = h || [j?.__type, j?.type, j?.code, j?.name].find((v) => typeof v === 'string' && v !== '');
+  return t?.slice(t.lastIndexOf('#') + 1);
+}
+
 export async function cloudClient(ctx, service) {
   if (!Object.hasOwn(SERVICES, service)) baseOf(service, 'prod'); // the error of an unknown service
   if (ctx.cloudEnv) baseOf(service, ctx.cloudEnv); // an environment the service lacks: refused before any request
@@ -43,18 +53,21 @@ export async function cloudClient(ctx, service) {
     const text = scrub(await res.text());
     if (!res.ok) {
       let reason = text.slice(0, 300);
+      let j;
       try {
-        const j = JSON.parse(text);
+        j = JSON.parse(text);
         reason = j.message ?? j.reason ?? j.error ?? reason;
       } catch {
         // not JSON: the text as it is
       }
+      const code = errorType(scrub(res.headers?.get?.('x-amzn-errortype') ?? ''), j);
       if (res.status === 401 || res.status === 403)
         throw new AuthError(
           `the cloud refused the token of ${t.company} for ${service} (${res.status}): ${scrub(reason)}`,
         );
       const err = new Error(`${service} answered ${res.status}: ${scrub(reason)}`);
       err.status = res.status;
+      if (code) err.code = code; // what the service says went wrong (NothingToPublishException), for the caller
       err.exitCode = 1;
       throw err;
     }

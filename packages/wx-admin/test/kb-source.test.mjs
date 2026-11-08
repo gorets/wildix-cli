@@ -14,7 +14,7 @@ const state = () => ({
       config: {
         confluence: {
           baseUrl: 'https://a.atlassian.net',
-          username: 'u@x.com',
+          username: 'u@x.example',
           apiKey: 'ATATT-secret',
           spaceId: '1',
           pages: {enabled: ['5'], disabled: []},
@@ -61,7 +61,7 @@ test('create confluence then configure with the key from stdin, never in output'
       '--url',
       'https://b.atlassian.net',
       '--user',
-      'me@x.com',
+      'me@x.example',
       '--space',
       '7',
       '--page',
@@ -77,7 +77,7 @@ test('create confluence then configure with the key from stdin, never in output'
     config: {
       confluence: {
         baseUrl: 'https://b.atlassian.net',
-        username: 'me@x.com',
+        username: 'me@x.example',
         apiKey: 'ATATT-new-key',
         spaceId: '7',
         pages: {enabled: ['9'], disabled: []},

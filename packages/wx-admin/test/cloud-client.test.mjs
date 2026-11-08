@@ -54,3 +54,55 @@ test('raw sends no Authorization', async () => {
   assert.equal(res.status, 200);
   assert.equal(f.cloudCalls()[0].headers.authorization, undefined);
 });
+
+test('an error keeps the type the service names, without its namespace', async () => {
+  const answers = [
+    {status: 409, body: {type: 'NothingToPublishException', message: 'nothing'}},
+    {status: 409, body: {__type: 'wildix.wilma.common#RevisionConflictException', message: 'conflict'}},
+    {status: 400, body: {code: 'ValidationException', message: 'bad'}},
+    {status: 500, body: {message: 'plain'}},
+    new Response('not json', {status: 502}),
+  ];
+  const f = fakeCloud(() => answers.shift());
+  const c = await cloudClient(ctxOf(f), 'wilma');
+  const codes = [];
+  for (let i = 0; i < 5; i++) {
+    const e = await c.call('POST', '/v2/tools/items/t1/versions').catch((x) => x);
+    codes.push([e.status, e.code]);
+  }
+  assert.deepEqual(codes, [
+    [409, 'NothingToPublishException'],
+    [409, 'RevisionConflictException'],
+    [400, 'ValidationException'],
+    [500, undefined],
+    [502, undefined],
+  ]);
+});
+
+test('the type in the x-amzn-errortype header (as live Wilma sends it) wins over the body', async () => {
+  const header = (type, body = {message: 'There is nothing new to publish.'}, status = 409) =>
+    new Response(JSON.stringify(body), {status, headers: {'x-amzn-errortype': type}});
+  const answers = [
+    header('NothingToPublishException'),
+    header('NothingToPublishException:http://internal.amazon.com/coral/wildix.wilma.common/'),
+    header('wildix.wilma.common#RevisionConflictException:http://internal.amazon.com/coral/'),
+    header('NothingToPublishException', {type: 'RevisionConflictException', message: 'x'}),
+    header('', {type: 'RevisionConflictException', message: 'x'}),
+    header(`${CPA}:x`, {message: 'echo'}, 400),
+  ];
+  const f = fakeCloud(() => answers.shift());
+  const c = await cloudClient(ctxOf(f), 'wilma');
+  const codes = [];
+  for (let i = 0; i < 6; i++) {
+    const e = await c.call('POST', '/v2/tools/items/t1/versions').catch((x) => x);
+    codes.push([e.status, e.code]);
+  }
+  assert.deepEqual(codes, [
+    [409, 'NothingToPublishException'],
+    [409, 'NothingToPublishException'],
+    [409, 'RevisionConflictException'],
+    [409, 'NothingToPublishException'],
+    [409, 'RevisionConflictException'],
+    [400, '<token>'],
+  ]);
+});

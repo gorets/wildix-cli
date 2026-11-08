@@ -48,6 +48,17 @@ export const SERVICES = {
       stage: 'https://api-stage.x-bees.com',
     },
   },
+  // The Stream service (chats) in its eu-1 region: wx-admin reads only its directory of users (QueryUsers) for the
+  // config transfer; no OpenAPI in specs/.
+  stream: {
+    label: 'the Stream directory of users',
+    spec: false,
+    bases: {
+      prod: 'https://eu-1.stream.wildix.com',
+      stable: 'https://eu-1.stream-stable.wildix.com',
+      stage: 'https://eu-1.stream-stage.wildix.com',
+    },
+  },
   wilma: {
     label: 'Wilma',
     bases: {

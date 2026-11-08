@@ -1,6 +1,6 @@
 // A config import, from a folder or (copy) from another PBX read in memory: plan against the target, choose, ask the
-// passwords, confirm, write, say what is left to do; everything in the log. Shared by `config import` and
-// `config copy`.
+// passwords and secrets, confirm, write, say what is left to do; everything in the log (never a secret: a secret
+// generated for a new object is only in the result, shown once). Shared by `config import` and `config copy`.
 import fs from 'node:fs';
 import path from 'node:path';
 import {createInterface} from 'node:readline/promises';
@@ -8,13 +8,16 @@ import {UsageError} from 'wldx-core/errors';
 import {clean} from 'wldx-core/format';
 import {readSecret} from 'wldx-core/secret';
 import {select} from 'wldx-core/select';
+import {MASK} from '../cloud/mask.mjs';
 import {accessLabel, readSerial} from '../pbx.mjs';
-import {applyPlan} from './apply.mjs';
-import {TRANSFER_KINDS, readKinds} from './kinds.mjs';
+import {applyPlan, policyOf} from './apply.mjs';
+import {readTarget} from './cloud-clients.mjs';
+import {isCloud, TRANSFER_KINDS} from './kinds.mjs';
 import {openLog} from './log.mjs';
+import {applyMap} from './map.mjs';
 import {nextSteps} from './next-steps.mjs';
 import {makePlan} from './plan.mjs';
-import {keyOf, refsOf} from './refs.mjs';
+import {keyOf} from './refs.mjs';
 import {GROUPS, parseOnly} from './selection.mjs';
 
 const listOf = (r) => (Array.isArray(r) ? r : (r?.records ?? []));
@@ -62,16 +65,6 @@ export async function targetChecks(client) {
   return {licenses, sounds, moh, phonebooks};
 }
 
-// The kinds to read on the target: those of the export and those its references point at.
-function kindsToRead(portable) {
-  const kinds = new Set(Object.keys(portable.kinds));
-  // queue members and users named by dialplans are checked against the target's users
-  if (Object.values(portable.soft ?? {}).some((keys) => keys.some((k) => k.startsWith('users/')))) kinds.add('users');
-  for (const list of Object.values(portable.kinds))
-    for (const o of list) for (const r of refsOf(o.data)) if (Object.hasOwn(TRANSFER_KINDS, r.kind)) kinds.add(r.kind);
-  return Object.keys(TRANSFER_KINDS).filter((k) => kinds.has(k));
-}
-
 // The paths of the secrets an object needs.
 export function secretsOf(data, path = '', out = []) {
   if (!data || typeof data !== 'object') return out;
@@ -84,9 +77,32 @@ export function secretsOf(data, path = '', out = []) {
   return out;
 }
 
+// What an empty answer to the prompt of a secret does, by the policy its kind declares for the path (an undeclared
+// one: the object is skipped, as a trunk without a password). On an overwrite the target keeps its own secret, and a
+// knowledge base source its configuration.
+const EMPTY = {
+  skip: 'skip it',
+  pending: 'created pending',
+  unconfigured: 'created without configuration',
+  generate: 'a new one is generated',
+};
+const EMPTY_ON_OVERWRITE = {
+  pending: 'keep the current one',
+  generate: 'keep the current one',
+  unconfigured: 'configuration not changed',
+};
+export function secretPrompt(it, path) {
+  const kind = TRANSFER_KINDS[it.kind];
+  const label = clean(`${kind.label} ${it.name}, ${path}`).replace(/\x1b\[[0-9;]*m|[\r\n]/g, ' ');
+  const policy = policyOf(kind, path)?.empty ?? 'skip';
+  const hint = (it.state === 'differs' && EMPTY_ON_OVERWRITE[policy]) || EMPTY[policy] || EMPTY.skip;
+  return `${label} (empty: ${hint}): `;
+}
+
 // --secrets FILE: {"<kind>/<name>": {"<path>": "…"}} or {"<kind>": {"<name>": {"<path>": "…"}}}; "password" fills
-// every secret path that names a secret or a password.
-function secretsFrom(file, items) {
+// every secret path that names a secret or a password. A value that is the mask (copied from masked output) is
+// refused: it would replace the secret on the target with the mask.
+export function secretsFrom(file, items) {
   const flat = {};
   for (const [k, v] of Object.entries(file ?? {})) {
     if (k.includes('/')) flat[k] = v;
@@ -101,6 +117,8 @@ function secretsFrom(file, items) {
       if (typeof given[p] === 'string') out[it.key][p] = given[p];
       else if (typeof given.password === 'string' && /secret|password/i.test(p.split('.').pop()))
         out[it.key][p] = given.password;
+      if (out[it.key][p] === MASK)
+        throw new UsageError(`--secrets: ${it.key} ${p}: ${MASK} is the mask, not a value: give the secret itself`);
     }
   }
   return out;
@@ -154,7 +172,9 @@ async function choose(ctx, plan, values) {
     for (const k of keys) add(k);
     return out;
   };
-  if (values.all) return new Set(plan.items.filter(writable).map((i) => i.key));
+  // the cloud with --all only with --cloud (as on export)
+  const cloudOk = (i) => !isCloud(i.kind) || values.cloud;
+  if (values.all) return new Set(plan.items.filter((i) => writable(i) && cloudOk(i)).map((i) => i.key));
   if (values.only) {
     const wanted = parseOnly(values.only);
     const keys = plan.items
@@ -174,7 +194,7 @@ async function choose(ctx, plan, values) {
         label: `${TRANSFER_KINDS[i.kind].label} ${i.name}`,
         badge: i.state === 'differs' ? 'differs: overwrite' : i.state,
         note: i.warnings.length ? i.warnings.map((w) => w.text).join('; ') : undefined,
-        checked: i.state === 'new',
+        checked: i.state === 'new' && cloudOk(i),
         ...(i.state === 'blocked' ? {disabled: i.reason} : {}),
       })),
   })).filter((g) => g.items.length);
@@ -198,12 +218,16 @@ async function confirm(ctx, question) {
 }
 
 // from: what the export comes from (a folder or a PBX), for the log and the output; rerun: the command to run the
-// same import again.
-export async function runImport(ctx, {portable, from, client, values, rerun}) {
+// same import again; clients: {pbx, …}, each kind reads and writes with its own (clientOf); map: the renames of
+// --map (readMap), applied before the plan; warnings: lines for the output and the log (an export from another
+// environment of the cloud).
+export async function runImport(ctx, {portable: exported, from, clients, values, rerun, map, warnings = []}) {
+  const portable = map ? applyMap(exported, map) : exported;
+  const client = clients.pbx;
   const host = client.target.host;
   const serial = await readSerial(client);
   const families = [...new Set((portable.kinds['dialplan-db'] ?? []).map((o) => o.name.split('/')[0]))];
-  const target = await readKinds(client, kindsToRead(portable), {dbFamilies: families, info: ctx.info});
+  const target = await readTarget(clients, portable, {dbFamilies: families, info: ctx.info});
   const plan = makePlan(portable, target, {serial, host, ...(await targetChecks(client))});
 
   const log = openLog(ctx, {dir: values.log, host, now: ctx.clock()});
@@ -211,6 +235,7 @@ export async function runImport(ctx, {portable, from, client, values, rerun}) {
   try {
     log.line(`wx-admin config import${values['dry-run'] ? ' (DRY RUN: nothing is written)' : ''}`);
     log.line(`from ${from} to ${host}; access: ${accessLabel(client.target)}`);
+    for (const w of warnings) log.line(`warning: ${w}`);
     log.line(
       `plan: ${Object.entries(plan.counts)
         .map(([k, n]) => `${n} ${k}`)
@@ -231,17 +256,14 @@ export async function runImport(ctx, {portable, from, client, values, rerun}) {
     for (const k of chosen) log.line(`chosen ${k}`);
     const items = plan.items.filter((i) => chosen.has(i.key));
 
-    // Passwords of the chosen objects that need one: --secrets, else asked (empty: skip that object).
+    // Passwords and secrets of the chosen objects that need one: --secrets, else asked (empty: what the policy of
+    // the path says; a path shared by a draft and its published definition is asked once).
     let secrets = values.secrets ? secretsFrom(await readSecretsFile(ctx, values.secrets), items) : {};
     if (!values.secrets && interactive(ctx) && !values['dry-run']) {
       secrets = {};
       for (const it of items) {
-        for (const p of secretsOf(it.data)) {
-          const label = clean(`${TRANSFER_KINDS[it.kind].label} ${it.name}, ${p}`).replace(
-            /\x1b\[[0-9;]*m|[\r\n]/g,
-            ' ',
-          );
-          const v = await readSecret(ctx, `${label} (empty: skip it): `);
+        for (const p of new Set(secretsOf(it.data))) {
+          const v = await readSecret(ctx, secretPrompt(it, p));
           if (v) (secrets[it.key] ??= {})[p] = v;
         }
       }
@@ -249,7 +271,9 @@ export async function runImport(ctx, {portable, from, client, values, rerun}) {
 
     const creating = items.filter((i) => i.state === 'new').length;
     const overwriting = items.filter((i) => i.state === 'differs').length;
-    const summary = `Write to ${host}: create ${creating}, overwrite ${overwriting}; not written: ${plan.items.length - creating - overwriting} (${plan.counts.same} the same, ${plan.counts.blocked} blocked)${plan.welcomeMails ? `; ${plan.welcomeMails} new users with an e-mail may get the welcome e-mail of the PBX` : ''}`;
+    // An overwritten agent deployed on the source is deployed again: it changes live traffic, so it is named.
+    const deploying = items.filter((i) => i.deploys).map((i) => i.key);
+    const summary = `Write to ${host}: create ${creating}, overwrite ${overwriting}; not written: ${plan.items.length - creating - overwriting} (${plan.counts.same} the same, ${plan.counts.blocked} blocked)${plan.welcomeMails ? `; ${plan.welcomeMails} new users with an e-mail may get the welcome e-mail of the PBX` : ''}${deploying.length ? `; deploys: ${deploying.join(', ')}` : ''}`;
     log.line(summary);
     let write = !values['dry-run'] && chosen.size > 0;
     if (write && !values.yes) {
@@ -257,46 +281,56 @@ export async function runImport(ctx, {portable, from, client, values, rerun}) {
       if (!write)
         log.line(interactive(ctx) ? 'not confirmed: nothing written' : 'no --yes without a terminal: nothing written');
     }
+    let generatedSecrets = {};
     if (write) {
       const selfDn = serial ? `pbxid=${serial},dc=wildix` : null;
-      results.push(
-        ...(await applyPlan(client, plan, chosen, {
-          secrets,
-          selfDn,
-          onEvent: (r) => {
-            const line = `${r.action} ${r.key}${r.id ? ` id ${r.id}` : ''}${r.error ? `: ${r.error}` : ''}${r.because ? ` (because ${r.because})` : ''}`;
-            log.line(line);
-            ctx.info(line);
-          },
-        })),
-      );
+      const applied = await applyPlan(clients, plan, chosen, {
+        secrets,
+        selfDn,
+        onEvent: (r) => {
+          // The steps of a multi-step write (a cloud object): [create, publish, deploy, draft]. A PBX object has none.
+          const line = `${r.action} ${r.key}${r.id ? ` id ${r.id}` : ''}${r.steps?.length ? ` [${r.steps.join(', ')}]` : ''}${r.error ? `: ${r.error}` : ''}${r.because ? ` (because ${r.because})` : ''}`;
+          log.line(line);
+          ctx.info(line);
+        },
+      });
+      // Read before the results are copied: a copy leaves out this non-enumerable field.
+      generatedSecrets = applied.generatedSecrets ?? {};
+      results.push(...applied);
     }
-    const steps = nextSteps({plan, results, host, rerun});
+    const steps = nextSteps({plan, results, host, rerun, mapFromStdin: values.map === '-'});
     for (const [n, s] of steps.entries())
       log.line(
         `next ${n + 1}${s.blocking ? ' (needed)' : ''}: ${s.what} — ${s.why}${s.wms ? ` — ${s.wms}` : ''}${s.command ? ` — ${s.command}` : ''}`,
       );
     log.line('done');
-    return {
+    const out = {
       pbx: host,
       from,
+      ...(warnings.length ? {warnings} : {}),
       dryRun: Boolean(values['dry-run']),
       written: write,
       plan: {
         counts: plan.counts,
         welcomeMails: plan.welcomeMails,
-        items: plan.items.map(({key, state, reason, warnings}) => ({
-          key,
-          state,
-          ...(reason ? {reason} : {}),
-          warnings: warnings.map((w) => w.text),
+        items: plan.items.map((i) => ({
+          key: i.key,
+          state: i.state,
+          ...(i.reason ? {reason: i.reason} : {}),
+          ...(i.paths?.length ? {paths: i.paths} : {}),
+          ...(i.deploys ? {deploys: true} : {}),
+          warnings: i.warnings.map((w) => w.text),
         })),
       },
       chosen: [...chosen],
       results,
       nextSteps: steps,
       log: log.path,
+      // The secrets generated for new objects ({[key]: {[path]: value}}): in the result only, the one place they are
+      // shown (once: the text output prints them, --json carries them); never in the log or the next steps.
+      ...(Object.keys(generatedSecrets).length ? {generatedSecrets} : {}),
     };
+    return out;
   } catch (e) {
     log.line(`error: ${e.message}`);
     throw e;

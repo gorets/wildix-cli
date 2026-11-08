@@ -1,5 +1,5 @@
 // A PBX that hands out a CPA token and the cloud services behind it, in one fetch. `cloud(method, url, init)` answers
-// the service requests ({status, body} or a Response); every request is recorded with its headers.
+// the service requests ({status, body, headers} or a Response); every request is recorded with its headers.
 import {clearCloudTokens} from '../src/cloud/token.mjs';
 import {fakeJwt, tempConfigDir} from './helpers.mjs';
 
@@ -33,7 +33,10 @@ export function fakeCloud(cloud, {portal = 'https://wim-console-stage.wildix.com
       );
     const a = await cloud(init.method ?? 'GET', u, {headers, body});
     if (a instanceof Response) return a;
-    return new Response(a?.body === undefined ? '' : JSON.stringify(a.body), {status: a?.status ?? 200});
+    return new Response(a?.body === undefined ? '' : JSON.stringify(a.body), {
+      status: a?.status ?? 200,
+      headers: a?.headers,
+    });
   };
   return {fetch, calls, cloudCalls: () => calls.filter((c) => c.host !== 'demo.wildixin.com')};
 }

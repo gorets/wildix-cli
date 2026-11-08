@@ -26,7 +26,7 @@ const masked = (ctx, data) => (ctx.values['show-secrets'] ? data : maskCloud(dat
 // ---- services and targets --------------------------------------------------------------------------------------
 
 export const listServices = async (client) => (await client.call('GET', `${KITE}/services`))?.services ?? [];
-const listBots = async (client) => (await client.call('GET', '/v2/users/bots'))?.bots ?? [];
+export const listBots = async (client) => (await client.call('GET', '/v2/users/bots'))?.bots ?? [];
 
 function findService(services, ref) {
   const want = String(ref);
@@ -116,7 +116,7 @@ const servicesCommand = {
 // ---- widgets ---------------------------------------------------------------------------------------------------
 
 // What CreateWidget and UpdateWidget take (UpdateWidget replaces the widget with it).
-const WIDGET_FIELDS = [
+export const WIDGET_FIELDS = [
   'name',
   'target',
   'appearance',
@@ -129,8 +129,8 @@ const WIDGET_FIELDS = [
   'widgetRestrictions',
   'skipWelcomeScreen',
 ];
-const listWidgets = async (client) => (await client.call('GET', `${KITE}/widgets`))?.widgets ?? [];
-const widgetPath = (id) => `${KITE}${apiPath`/widgets/${id}`}`;
+export const listWidgets = async (client) => (await client.call('GET', `${KITE}/widgets`))?.widgets ?? [];
+export const widgetPath = (id) => `${KITE}${apiPath`/widgets/${id}`}`;
 async function findWidget(client, ref) {
   const all = await listWidgets(client);
   const w =
@@ -290,7 +290,7 @@ const widgetCommands = {
 
 // What a Put…Configuration takes: the service conversations are linked to, the default target, the routes (work
 // hours) and the actions.
-const CHANNEL_FIELDS = ['serviceUri', 'target', 'routes', 'actions'];
+export const CHANNEL_FIELDS = ['serviceUri', 'target', 'routes', 'actions'];
 
 // One kind of channel: SMS and WhatsApp by service number, Messenger and RCS by sender id.
 function channelCommands(kind) {
@@ -448,6 +448,14 @@ const bySender = (channel) => ({
   noun: 'sender',
 });
 
+// The channels by kind: each lists its numbers or senders and their configurations, and names the path of one.
+export const CHANNELS = {
+  sms: byNumber('sms'),
+  whatsapp: byNumber('whatsapp'),
+  messenger: bySender('messenger'),
+  rcs: bySender('rcs'),
+};
+
 const whatsappTemplates = {
   summary: 'the message templates a WhatsApp number may start a conversation with',
   usage: 'wx-admin kite whatsapp templates <number>',
@@ -475,19 +483,19 @@ export const groups = {
     commands: {
       services: servicesCommand,
       widget: {summary: 'the chat widgets of websites', commands: widgetCommands},
-      sms: {summary: 'the SMS numbers', commands: channelCommands({name: 'sms', label: 'SMS', ...byNumber('sms')})},
+      sms: {summary: 'the SMS numbers', commands: channelCommands({name: 'sms', label: 'SMS', ...CHANNELS.sms})},
       whatsapp: {
         summary: 'the WhatsApp numbers and their templates',
         commands: {
-          ...channelCommands({name: 'whatsapp', label: 'WhatsApp', ...byNumber('whatsapp')}),
+          ...channelCommands({name: 'whatsapp', label: 'WhatsApp', ...CHANNELS.whatsapp}),
           templates: whatsappTemplates,
         },
       },
       messenger: {
         summary: 'the Facebook pages of Messenger',
-        commands: channelCommands({name: 'messenger', label: 'Messenger', ...bySender('messenger')}),
+        commands: channelCommands({name: 'messenger', label: 'Messenger', ...CHANNELS.messenger}),
       },
-      rcs: {summary: 'the RCS brands', commands: channelCommands({name: 'rcs', label: 'RCS', ...bySender('rcs')})},
+      rcs: {summary: 'the RCS brands', commands: channelCommands({name: 'rcs', label: 'RCS', ...CHANNELS.rcs})},
     },
   },
 };

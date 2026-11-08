@@ -1,10 +1,11 @@
 // Secrets in the answers of the cloud services, masked: fields whose name says secret (keys, tokens, passwords,
 // credentials), the value of a header whose name does (headers as [{name, value}]), every custom header, every
 // sandbox environment value, a key or token in the query of a URI; never the cursors and page tokens of paged lists.
-// What only names or points to a secret stays visible: Wilma secret records and references ({id}), connection
-// references, API key metadata, the authorization modes of a connector, a key that names a thing ({key, version},
-// {id, key}), ids, types, scopes and statuses. A whole object is hidden only for service account credentials;
-// any other object under a secret name is walked, its secret fields masked by name and every `value` in it masked.
+// What only names or points to a secret stays visible: Wilma secret records and references ({id}, `secrets:<id>` in a
+// voice URI), connection references, API key metadata, the authorization modes of a connector, a key that names a
+// thing ({key, version}, {id, key}), ids, types, scopes and statuses. A whole object is hidden only for service
+// account credentials; any other object under a secret name is walked, its secret fields masked by name and every
+// `value` in it masked.
 // A `key` next to a `secret` is the other half of a key pair (an SQS webhook of WIM integrations), and a
 // `connectionId` next to a `providerConfigKey` is a Nango connection: whoever holds its id can bind that CRM.
 // The shapes come from the OpenAPI of the knowledge base, WIM voicebots, WIM tools and Wilma (specs/), and from the
@@ -21,7 +22,16 @@ const NAMING = ['id', 'version', 'name', 'title', 'type', 'kind', 'value', 'payl
 // The authorization status of a connector in the assistant.
 const AUTH_STATUS = /^(?:not_required|not_connected|connected|needs_reconnect)$/;
 const SECRET_HEADER = /authorization|api-?key|token|secret|cookie|auth/i;
-const URI_SECRET = /([?&](?:api_?key|access_?token|token|key|secret)=)[^&#\s]+/gi;
+const URI_SECRET = /([?&](?:api_?key|access_?token|token|key|secret)=)([^&#\s]+)/gi;
+// The key of a speech provider in a voice URI names a Wilma secret (`apiKey=secrets:<id>`, or `secrets:{0}` where a
+// config transfer holds the reference): a reference, not the key, so it stays. Only that shape, `apiKey` as written:
+// any other key or token naming a secret id stays masked.
+const VOICE_KEY_REF = /^[?&]apiKey=$/;
+const SECRET_REF = /^secrets:(?:[A-Za-z0-9_-]+|\{\d+\})$/;
+const maskUri = (s) =>
+  s.replace(URI_SECRET, (all, name, value) =>
+    VOICE_KEY_REF.test(name) && SECRET_REF.test(value) ? all : `${name}${MASK}`,
+  );
 
 const isSecretKey = (k) => SECRET.test(k) && !PAGING.test(k) && !DESCRIBES.test(k);
 const hide = (v) => (v === null || v === undefined || v === '' ? v : MASK);
@@ -80,6 +90,6 @@ export function maskCloud(value, key = '', inSecret = false) {
       }),
     );
   }
-  if (typeof value === 'string' && /[?&]/.test(value)) return value.replace(URI_SECRET, `$1${MASK}`);
+  if (typeof value === 'string' && /[?&]/.test(value)) return maskUri(value);
   return value;
 }
